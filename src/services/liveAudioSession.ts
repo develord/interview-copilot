@@ -20,7 +20,7 @@ export class LiveAudioSession implements SessionController {
   constructor(private readonly options: LiveAudioSessionOptions) {}
 
   start(): void {
-    const { system, microphone, transcription } = this.options.getConfig();
+    const { system, microphone, transcription, questions } = this.options.getConfig();
     // Plain copies: the config may be reactive, and IPC must receive plain data.
     void this.run(() =>
       this.options.backend.start({
@@ -29,6 +29,7 @@ export class LiveAudioSession implements SessionController {
         transcription: transcription
           ? { ...transcription, extraTerms: [...transcription.extraTerms] }
           : null,
+        questions: questions ? { ...questions } : null,
       }),
     );
   }

@@ -7,7 +7,7 @@ import Icon from "@/components/icons/Icon";
  * punishes capturing or transmitting private words without their author's consent; consent
  * is presumed only when done openly. This is product guidance, not legal advice.
  */
-defineProps<{ transcribedBy: string | null }>();
+defineProps<{ transcribedBy: string | null; analyzedBy: string | null }>();
 defineEmits<{ confirm: []; cancel: [] }>();
 
 const informed = ref(false);
@@ -27,6 +27,9 @@ const SCRIPT =
       La voix de votre interlocuteur va être captée<template v-if="transcribedBy">
         et transmise à <strong>{{ transcribedBy }}</strong> (serveurs UE) pour la
         transcription</template
+      ><template v-if="analyzedBy"
+        >, puis le texte transcrit analysé par <strong>{{ analyzedBy }}</strong> pour repérer les
+        questions</template
       >. En France, capter ou transmettre des paroles privées sans le consentement de leur auteur
       est sanctionné (art. 226-1 du Code pénal). Informez votre interlocuteur et obtenez son accord.
     </p>

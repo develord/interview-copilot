@@ -4,3 +4,5 @@ src-tauri/target
 src-tauri/gen
 pnpm-lock.yaml
 contracts
+# Prompts are versioned artifacts: their bytes change only on purpose.
+src-tauri/prompts

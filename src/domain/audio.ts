@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { QuestionDetectionConfig } from "./intent";
 import type { TranscriptionConfig } from "./stt";
 
 /**
@@ -81,6 +82,8 @@ export interface AudioConfig {
   microphone: SourceConfig;
   /** Speech-to-text for the captured audio; `null` captures without transcribing. */
   transcription: TranscriptionConfig | null;
+  /** Question detection on the transcripts; needs transcription. */
+  questions: QuestionDetectionConfig | null;
 }
 
 /** Narrows an `invoke` rejection to an `AudioError` when the backend sent one. */

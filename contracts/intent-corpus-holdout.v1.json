@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "description": "Hold-out dialogues for question detection, written after prompt classification.v3 was frozen and never used to tune prompts or rules. Same format and labels as intent-corpus.v1.json. Report these scores as the honest estimate.",
+  "dialogues": [
+    {
+      "id": "holdout-fr-data",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Re-bonjour, désolé pour le petit retard.", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Aucun souci." },
+        { "id": "t3", "speaker": "interviewer", "text": "Alors, l'équipe data cherche quelqu'un d'autonome sur les pipelines.", "expect": { "respond": false } },
+        { "id": "t4", "speaker": "interviewer", "text": "Tu as déjà manipulé de gros volumes de données, genre plusieurs téraoctets ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "TECHNICAL_QUESTION"] } },
+        { "id": "t5", "speaker": "candidate", "text": "Oui, sur un data lake S3 avec Spark." },
+        { "id": "t6", "speaker": "interviewer", "text": "Ok.", "expect": { "respond": false } },
+        { "id": "t7", "speaker": "interviewer", "text": "Comment tu optimiserais un job Spark qui fait énormément de shuffle ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "SYSTEM_DESIGN"] } },
+        { "id": "t8", "speaker": "candidate", "text": "En partitionnant mieux en amont, et avec des broadcast joins pour les petites tables." },
+        { "id": "t9", "speaker": "interviewer", "text": "Et si la petite table ne tient pas en mémoire ?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP", "TECHNICAL_QUESTION"], "followUpOf": ["t7"] } },
+        { "id": "t10", "speaker": "candidate", "text": "Je passerais à un sort-merge join, ou je filtrerais avant." },
+        { "id": "t11", "speaker": "interviewer", "text": "Bon, je note.", "expect": { "respond": false } },
+        { "id": "t12", "speaker": "interviewer", "text": "Petite parenthèse, la prise de poste serait en janvier.", "expect": { "respond": false } },
+        { "id": "t13", "speaker": "interviewer", "text": "Ça te conviendrait ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "CLARIFICATION_OR_FOLLOW_UP", "GREETING_OR_SMALL_TALK"] } }
+      ]
+    },
+    {
+      "id": "holdout-en-frontend",
+      "language": "en",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Good morning! Sorry, my camera is a bit laggy today.", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Good morning, no problem at all." },
+        { "id": "t3", "speaker": "interviewer", "text": "Let's start with something simple.", "expect": { "respond": false } },
+        { "id": "t4", "speaker": "interviewer", "text": "What's the difference between localStorage and sessionStorage?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION"] } },
+        { "id": "t5", "speaker": "candidate", "text": "sessionStorage is cleared when the tab closes; localStorage persists." },
+        { "id": "t6", "speaker": "interviewer", "text": "And cookies?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP", "TECHNICAL_QUESTION"], "followUpOf": ["t4"] } },
+        { "id": "t7", "speaker": "candidate", "text": "Cookies are sent with every request and can be HttpOnly." },
+        { "id": "t8", "speaker": "interviewer", "text": "Okay, cool, cool.", "expect": { "respond": false } },
+        { "id": "t9", "speaker": "interviewer", "text": "Our app is mostly server-rendered, with a bit of htmx here and there.", "expect": { "respond": false } },
+        { "id": "t10", "speaker": "interviewer", "text": "If you had to add real-time notifications to it, how would you approach it?", "expect": { "respond": true, "intents": ["SYSTEM_DESIGN", "TECHNICAL_QUESTION"] } },
+        { "id": "t11", "speaker": "interviewer", "text": "Without rewriting everything, I mean.", "gapMs": 1200, "expect": { "revises": "t10" } },
+        { "id": "t12", "speaker": "candidate", "text": "Server-sent events from the existing backend, behind a small pub/sub." },
+        { "id": "t13", "speaker": "interviewer", "text": "Fair enough.", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "holdout-mixed-testing",
+      "language": "mixed",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Alors, côté tests, how do you usually structure them ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "EXPERIENCE_QUESTION"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Une pyramide classique : beaucoup d'unitaires, quelques tests d'intégration." },
+        { "id": "t3", "speaker": "interviewer", "text": "Et les tests end-to-end, tu les lances à chaque PR ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "TECHNICAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"] } },
+        { "id": "t4", "speaker": "candidate", "text": "Seulement les parcours critiques, le reste tourne la nuit." },
+        { "id": "t5", "speaker": "interviewer", "text": "Est-ce que tu as déjà eu des tests flaky, et comment tu les as gérés ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "BEHAVIORAL_QUESTION", "TECHNICAL_QUESTION"] } },
+        { "id": "t6", "speaker": "candidate", "text": "Oui, on les mettait en quarantaine avec un ticket." },
+        { "id": "t7", "speaker": "interviewer", "text": "Ah oui, classique, on a exactement le même souci.", "expect": { "respond": false } },
+        { "id": "t8", "speaker": "interviewer", "text": "Imagine que la CI met quarante minutes", "expect": { "merge": true } },
+        { "id": "t9", "speaker": "interviewer", "text": "qu'est-ce que tu ferais en premier ?", "gapMs": 500, "expect": { "respond": true, "intents": ["SYSTEM_DESIGN", "TECHNICAL_QUESTION"] } },
+        { "id": "t10", "speaker": "candidate", "text": "Je mesurerais d'abord où part le temps, puis je paralléliserais." },
+        { "id": "t11", "speaker": "interviewer", "text": "Ok, on va s'arrêter là pour la partie technique.", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "holdout-fr-manager",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Raconte-moi la dernière fois que tu as dû dire non à un product manager.", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Il voulait une fonctionnalité pour la veille d'une mise en production." },
+        { "id": "t3", "speaker": "interviewer", "text": "Et avec le recul, tu referais pareil ?", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"], "followUpOf": ["t1"] } },
+        { "id": "t4", "speaker": "candidate", "text": "Oui, mais je proposerais une alternative plus tôt." },
+        { "id": "t5", "speaker": "interviewer", "text": "C'est une qualité qu'on recherche, honnêtement.", "expect": { "respond": false } },
+        { "id": "t6", "speaker": "interviewer", "text": "Tu te vois où dans trois ans ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "BEHAVIORAL_QUESTION"] } },
+        { "id": "t7", "speaker": "candidate", "text": "Pardon, ça a coupé." },
+        { "id": "t8", "speaker": "interviewer", "text": "Tu te vois où dans trois ans ?", "expect": { "repeatOf": "t6" } },
+        { "id": "t9", "speaker": "candidate", "text": "Plutôt lead technique, dans une équipe produit." },
+        { "id": "t10", "speaker": "interviewer", "text": "Merci beaucoup pour cet échange.", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } }
+      ]
+    }
+  ]
+}

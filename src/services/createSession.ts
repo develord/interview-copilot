@@ -36,7 +36,13 @@ export function createSession({ session, settings, backend }: Dependencies) {
     // A webview reload must never leave an invisible capture running in Rust.
     void backend.stop().catch(() => {});
     void backend
-      .onPipelineEvent((payload) => session.dispatch(payload))
+      .onPipelineEvent((payload) => {
+        const event = session.dispatch(payload);
+        // Answers to detected questions stay simulated until the answer engine (Phase 5).
+        if (event?.type === "question.detected" && event.question.source === "speech") {
+          demo.answerDetected(event.question);
+        }
+      })
       .then((unlisten) => cleanups.push(unlisten));
   }
 
@@ -77,6 +83,7 @@ export const FAST_ENDPOINT_MS = 700;
 
 export function audioConfig(settings: Dependencies["settings"]): AudioConfig {
   const t = settings.transcription;
+  const q = settings.questions;
   return {
     system: settings.audio.system,
     microphone: settings.audio.microphone,
@@ -88,5 +95,7 @@ export function audioConfig(settings: Dependencies["settings"]): AudioConfig {
           builtinVocabulary: t.builtinVocabulary,
         }
       : null,
+    questions:
+      t.enabled && q.enabled ? { model: q.model, includeMicrophone: q.includeMicrophone } : null,
   };
 }

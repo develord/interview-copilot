@@ -10,10 +10,12 @@ import {
   type IgnoreReason,
 } from "@/domain/cardLifecycle";
 import type { AudioError, SourceDiagnostics, SourceKind } from "@/domain/audio";
+import type { ClassifierStatus, UtteranceReport } from "@/domain/intent";
 import type { SttStatus } from "@/domain/stt";
 import {
   isCardEvent,
   parsePipelineEvent,
+  type PipelineEvent,
   type PipelineEventType,
   type TranscriptSegment,
 } from "@/domain/events";
@@ -57,6 +59,9 @@ export const useSessionStore = defineStore("session", () => {
     order: [],
   });
   const sttStatus = ref<Partial<Record<SourceKind, SttStatus>>>({});
+  /** Question-detection decisions, keyed by the last transcript segment of each utterance. */
+  const utteranceBySegment = reactive<Record<string, UtteranceReport>>({});
+  const classifierStatus = ref<ClassifierStatus | null>(null);
   const diagnostics = reactive<SessionDiagnostics>({
     applied: 0,
     ignored: 0,
@@ -73,13 +78,17 @@ export const useSessionStore = defineStore("session", () => {
     () => cards.value.filter((c) => c.status === "pending" || c.status === "streaming").length,
   );
 
-  /** Single entry point for pipeline events. Accepts `unknown`: everything is validated here. */
-  function dispatch(input: unknown, now: number = Date.now()): void {
+  /**
+   * Single entry point for pipeline events. Accepts `unknown`: everything is validated here.
+   * Returns the validated event once it has been applied, or `null` when it was malformed or
+   * ignored by the card lifecycle (a duplicate question, a stale token...).
+   */
+  function dispatch(input: unknown, now: number = Date.now()): PipelineEvent | null {
     const parsed = parsePipelineEvent(input);
     if (!parsed.ok) {
       diagnostics.invalid += 1;
       diagnostics.lastInvalid = parsed.error;
-      return;
+      return null;
     }
     const event = parsed.event;
 
@@ -87,11 +96,27 @@ export const useSessionStore = defineStore("session", () => {
       status.value = event.status;
       statusMessage.value = event.message;
       if (event.status === "listening") commandError.value = null;
-      return;
+      return event;
     }
     if (event.type === "audio.diagnostics") {
       audioSources.value = event.sources;
-      return;
+      return event;
+    }
+    if (event.type === "classifier.status") {
+      classifierStatus.value = {
+        state: event.state,
+        model: event.model,
+        error: event.error,
+        lastLatencyMs: event.lastLatencyMs,
+        classified: event.classified,
+        failed: event.failed,
+      };
+      return event;
+    }
+    if (event.type === "utterance.classified") {
+      const last = event.utterance.segmentIds.at(-1);
+      if (last) utteranceBySegment[last] = event.utterance;
+      return event;
     }
     if (event.type === "stt.status") {
       const status: SttStatus = {
@@ -103,20 +128,19 @@ export const useSessionStore = defineStore("session", () => {
         droppedChunks: event.droppedChunks,
       };
       sttStatus.value = { ...sttStatus.value, [status.source]: status };
-      return;
+      return event;
     }
     if (event.type === "transcript.partial" || event.type === "transcript.final") {
       upsertSegment(event.segment);
-      return;
+      return event;
     }
-    // Transcript events are consumed by the transcript panel from Phase 3 onwards.
-    if (!isCardEvent(event)) return;
+    if (!isCardEvent(event)) return event;
 
     const outcome = applyEvent(cardState, event, now);
     if (!outcome.applied) {
       diagnostics.ignored += 1;
       diagnostics.lastIgnored = { type: event.type, reason: outcome.reason };
-      return;
+      return null;
     }
     diagnostics.applied += 1;
 
@@ -133,6 +157,7 @@ export const useSessionStore = defineStore("session", () => {
       const card = getCardByQuestion(cardState, event.questionId);
       if (card) active.value = { ...active.value, question: card.question };
     }
+    return event;
   }
 
   function upsertSegment(segment: TranscriptSegment): void {
@@ -142,7 +167,9 @@ export const useSessionStore = defineStore("session", () => {
     if (!existing) {
       transcript.order.push(segment.id);
       while (transcript.order.length > TRANSCRIPT_LIMIT) {
-        delete transcript.byId[transcript.order.shift()!];
+        const dropped = transcript.order.shift()!;
+        delete transcript.byId[dropped];
+        delete utteranceBySegment[dropped];
       }
     }
     transcript.byId[segment.id] = segment;
@@ -163,6 +190,7 @@ export const useSessionStore = defineStore("session", () => {
     active.value = null;
     transcript.byId = {};
     transcript.order = [];
+    for (const key of Object.keys(utteranceBySegment)) delete utteranceBySegment[key];
   }
 
   return {
@@ -176,6 +204,8 @@ export const useSessionStore = defineStore("session", () => {
     reportCommandError,
     transcriptLines,
     sttStatus,
+    utteranceBySegment,
+    classifierStatus,
     cards,
     inFlightCount,
     diagnostics,

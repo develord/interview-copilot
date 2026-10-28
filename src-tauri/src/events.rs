@@ -5,6 +5,7 @@
 use serde::Serialize;
 
 use crate::audio::types::SourceDiagnostics;
+use crate::intent::types::{ClassifierStatus, DetectedQuestion, UtteranceReport};
 use crate::stt::types::{SttStatus, TranscriptSegment};
 
 /// Tauri event name carrying every `PipelineEvent`.
@@ -36,6 +37,18 @@ pub enum PipelineEvent {
     TranscriptFinal { segment: TranscriptSegment },
     #[serde(rename = "stt.status")]
     SttStatus(SttStatus),
+    #[serde(rename = "question.detected")]
+    QuestionDetected { question: DetectedQuestion },
+    #[serde(rename = "question.revised")]
+    QuestionRevised {
+        #[serde(rename = "questionId")]
+        question_id: String,
+        text: String,
+    },
+    #[serde(rename = "utterance.classified")]
+    UtteranceClassified { utterance: UtteranceReport },
+    #[serde(rename = "classifier.status")]
+    ClassifierStatus(ClassifierStatus),
 }
 
 #[cfg(test)]
@@ -119,6 +132,82 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&event).unwrap(),
             fixture("stt-status.json")
+        );
+    }
+
+    #[test]
+    fn question_events_match_the_shared_contract_fixtures() {
+        use crate::intent::types::{DetectedQuestion, Intent, Language};
+        let detected = PipelineEvent::QuestionDetected {
+            question: DetectedQuestion {
+                id: "session-1761649200000-q2".into(),
+                session_id: "session-1761649200000".into(),
+                source: "speech",
+                source_segment_ids: vec!["system-1-3".into(), "system-1-4".into()],
+                original_utterance:
+                    "Et du coup, sur la partie base de données, tu choisirais quoi ?".into(),
+                normalized_question: "Quelle base de données choisirais-tu ?".into(),
+                intent: Intent::TechnicalQuestion,
+                language: Language::Fr,
+                domain: Some("databases".into()),
+                context_ref: Some("session-1761649200000-q1".into()),
+                detected_at: 1_761_649_212_345,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&detected).unwrap(),
+            fixture("question-detected.json")
+        );
+
+        let revised = PipelineEvent::QuestionRevised {
+            question_id: "session-1761649200000-q2".into(),
+            text: "Comment gères-tu le state management avec Vue 3 ?".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&revised).unwrap(),
+            fixture("question-revised.json")
+        );
+    }
+
+    #[test]
+    fn classification_diagnostics_match_the_shared_contract_fixtures() {
+        use crate::intent::types::{
+            ClassifierState, ClassifierStatus, ClassifyError, ClassifyErrorCode, Decision,
+            IgnoreReason, Intent, Stage, UtteranceReport,
+        };
+        let classified = PipelineEvent::UtteranceClassified {
+            utterance: UtteranceReport {
+                id: "session-1761649200000-u5".into(),
+                source_id: "system".into(),
+                segment_ids: vec!["system-1-6".into()],
+                text: "On utilise Kafka chez nous.".into(),
+                decision: Decision::Ignored,
+                reason: Some(IgnoreReason::Statement),
+                intent: Some(Intent::NonQuestionStatement),
+                stage: Stage::Llm,
+                question_id: None,
+                latency_ms: Some(640),
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&classified).unwrap(),
+            fixture("utterance-classified.json")
+        );
+
+        let status = PipelineEvent::ClassifierStatus(ClassifierStatus {
+            state: ClassifierState::Degraded,
+            model: Some("claude-opus-5-5"),
+            error: Some(ClassifyError::new(
+                ClassifyErrorCode::RateLimited,
+                "HTTP 429: slow down",
+            )),
+            last_latency_ms: Some(812),
+            classified: 14,
+            failed: 1,
+        });
+        assert_eq!(
+            serde_json::to_value(&status).unwrap(),
+            fixture("classifier-status.json")
         );
     }
 

@@ -33,7 +33,7 @@ const phase = computed(() => store.activeCard?.status ?? null);
         store.status !== "listening"
           ? "Aucune question pour l'instant."
           : settings.sessionMode === "live"
-            ? "Capture en cours — la détection des questions arrive en phase 4."
+            ? "À l'écoute… les questions de votre interlocuteur apparaîtront ici."
             : "À l'écoute… aucune question détectée."
       }}
     </p>

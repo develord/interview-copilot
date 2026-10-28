@@ -66,6 +66,9 @@ const consentRequired = computed(
 const transcribedBy = computed(() =>
   settings.transcription.enabled ? PROVIDER_LABEL[settings.transcription.provider] : null,
 );
+const analyzedBy = computed(() =>
+  transcribedBy.value && settings.questions.enabled ? "Claude (Anthropic)" : null,
+);
 
 function requestStart() {
   if (consentRequired.value && Date.now() - consentConfirmedAt > CONSENT_VALIDITY_MS) {
@@ -162,6 +165,7 @@ useShortcuts({
     <ConsentDialog
       v-if="consentOpen"
       :transcribed-by="transcribedBy"
+      :analyzed-by="analyzedBy"
       @confirm="confirmConsent"
       @cancel="consentOpen = false"
     />

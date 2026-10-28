@@ -1,0 +1,12 @@
+{
+  "type": "classifier.status",
+  "state": "degraded",
+  "model": "claude-opus-5-5",
+  "error": {
+    "code": "rate-limited",
+    "detail": "HTTP 429: slow down"
+  },
+  "lastLatencyMs": 812,
+  "classified": 14,
+  "failed": 1
+}

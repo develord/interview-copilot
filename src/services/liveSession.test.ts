@@ -5,7 +5,7 @@ import type { AudioConfig, AudioError } from "@/domain/audio";
 import type { AudioBackend } from "@/platform/audioBackend";
 import { useOverlaySettings } from "@/stores/overlaySettings";
 import { useSessionStore } from "@/stores/session";
-import { createSession } from "./createSession";
+import { audioConfig, createSession } from "./createSession";
 import { LiveAudioSession } from "./liveAudioSession";
 import type { SessionController } from "./sessionController";
 import { SessionRouter } from "./sessionRouter";
@@ -46,6 +46,7 @@ const config: AudioConfig = {
   system: { enabled: true, deviceId: null, muted: false },
   microphone: { enabled: false, deviceId: null, muted: false },
   transcription: null,
+  questions: null,
 };
 
 describe("LiveAudioSession", () => {
@@ -180,5 +181,60 @@ describe("createSession (desktop wiring)", () => {
 
     emitFromRust({ type: "session.status", status: "listening", message: null });
     expect(session.commandError).toBeNull();
+  });
+
+  it("detects questions only when transcription runs, with the chosen model", () => {
+    const { settings } = setup();
+    expect(audioConfig(settings).questions).toBeNull();
+
+    settings.transcription.enabled = true;
+    expect(audioConfig(settings).questions).toEqual({
+      model: "claude-haiku-5-5",
+      includeMicrophone: false,
+    });
+
+    settings.questions.model = "claude-opus-5-5";
+    settings.questions.includeMicrophone = true;
+    expect(audioConfig(settings).questions).toEqual({
+      model: "claude-opus-5-5",
+      includeMicrophone: true,
+    });
+
+    settings.questions.enabled = false;
+    expect(audioConfig(settings).questions).toBeNull();
+  });
+
+  it("answers a question detected in Rust with a simulated answer in its own card", async () => {
+    vi.useFakeTimers();
+    try {
+      const { session, emitFromRust } = setup();
+      await vi.waitFor(() => expect(session.status).toBe("idle"));
+      const question = {
+        id: "session-1-q1",
+        sessionId: "session-1",
+        source: "speech",
+        sourceSegmentIds: ["system-1-0"],
+        originalUtterance: "Comment tu gères le state dans Vue ?",
+        normalizedQuestion: "Comment gères-tu le state dans Vue ?",
+        intent: "TECHNICAL_QUESTION",
+        language: "fr",
+        domain: "frontend",
+        contextRef: null,
+        detectedAt: 1,
+      };
+      emitFromRust({ type: "question.detected", question });
+      // The same question again (a replayed event) must not start a second answer.
+      emitFromRust({ type: "question.detected", question });
+
+      await vi.runAllTimersAsync();
+      expect(session.cards).toHaveLength(1);
+      const card = session.cards[0]!;
+      expect(card.question).toBe("Comment gères-tu le state dans Vue ?");
+      expect(card.status).toBe("completed");
+      expect(card.answer).toContain("TECHNICAL_QUESTION");
+      expect(card.attempt).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

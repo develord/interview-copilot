@@ -1,8 +1,10 @@
 # Implementation status
 
-Last updated: 2026-10-28 · Current phase: **Phase 3 implemented; AssemblyAI validated on the
-synthetic smoke corpus** (Soniox and the real recorded corpus still pending). Next: record the
-real corpus, then Phase 4 (intent classification).
+Last updated: 2026-10-28 · Current phase: **Phase 4 implemented and measured.** Haiku 5.5 is
+the default, with prompt v3. On the hold-out corpus: 94 % recall, no false positive, intents
+and follow-ups right. Latency: 1.1–1.3 s per classification, against a 500 ms target that a
+remote model cannot reach (floor ~750 ms on the server side). Phase 3 passed a live test in the
+app. Next: a live Phase 4 test, then Phase 5 (answer engine, in the same streamed call).
 
 ## Environment
 
@@ -13,7 +15,7 @@ real corpus, then Phase 4 (intent classification).
 | Rust          | 1.99.1 stable-x86_64-pc-windows-msvc (Rustup 1.29.1, installed via winget on 2026-10-28)     |
 | C++ toolchain | Visual Studio 2022 Build Tools 17.14 — VCTools workload (installed via winget on 2026-10-28) |
 | WebView2      | 156.0.4314.50                                                                                |
-| Repository    | Started from an empty folder; `git init` done, **no commits yet**, no remote                 |
+| Repository    | Branch `feat/overlay-audio-transcription`, no remote                                         |
 
 `cargo` is installed in `%USERPROFILE%\.cargo\bin`. Shells opened before the install may need
 `PATH` refreshed (open a new terminal).
@@ -25,6 +27,9 @@ real corpus, then Phase 4 (intent classification).
 - **TypeScript 6.0.3**, not 7.x: `typescript-eslint` supports `<6.1`, and the official
   `create-tauri-app` vue-ts template pins `~6.0`.
 - **jsdom 29.1**, not 30.x: jsdom 30 needs Node ≥ 22.22 (its undici 8 crashes on Node 22.14).
+- Question detection (Phase 4): `reqwest` 0.13 with `native-tls` (schannel, as for the
+  WebSockets; no rustls/aws-lc build), `json`, `http2`, `system-proxy`. Raw HTTP to the Claude
+  Messages API: there is no official Rust SDK.
 - Transcription (Phase 3): `tokio-tungstenite` 0.30 (native TLS / schannel), `keyring` 4.2
   (Windows Credential Manager, v1 `Entry` API), `hound` 3.5 (benchmark harness only, behind
   the `bench` feature).
@@ -199,6 +204,10 @@ provider choice comes from [the STT comparison report](../reports/Comparatif%20S
 | French, English and mixed-language test cases are evaluated  | ✅ smoke / ⏳ real corpus         | AssemblyAI, 12 synthetic utterances: WER 0 % FR, 0 % EN, 1.6 % mixed; term recall 93 %; time-to-final p50 613 ms, p95 994 ms (700 ms endpoint). The real ~150-utterance corpus (recorded, consenting speakers) and Soniox are still to do |
 | The source transcript remains available for debugging        | ✅                                | Live transcript panel (last 200 segments in memory, cleared with the history); per-source STT status                                                                                                                                      |
 
+**Live test in the app (2026-10-28, run by the user):** AssemblyAI transcription of real
+system audio in the native overlay, judged "nickel". Not yet checked by hand: the microphone
+through the UI, unplug and replug, and a privacy-blocked microphone.
+
 ### Bugs found while building (fixed, with regression tests)
 
 1. The VAD missed speech that started at stream start: the rolling noise floor had no history,
@@ -219,6 +228,43 @@ provider choice comes from [the STT comparison report](../reports/Comparatif%20S
   classifier.
 - Keys are personal (the Credential Manager of this Windows user). A distributed product would
   need a small token service: AssemblyAI `/v3/token`, Soniox temporary keys.
+
+## Phase 4 — intent classification: implemented, measured (latency above the PRD target)
+
+Design, privacy and results: [QUESTION_DETECTION.md](QUESTION_DETECTION.md).
+
+### Deliverables
+
+| Deliverable                                                                                                                             | Where                                                                                                                 | Verified how                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Taxonomy (9 intents) shared Rust ↔ TS                                                                                                   | `intent/types.rs`, `domain/types.ts`, `domain/intent.ts`                                                              | Contract fixtures `question-detected`, `question-revised`, `utterance-classified`, `classifier-status`, asserted from both test suites                                                                            |
+| Utterance assembly (cut turns merged, finalization timeout)                                                                             | `intent/assembler.rs`                                                                                                 | 6 unit tests (merge, timeout, partials extend up to the hard limit, per-source independence, flush)                                                                                                               |
+| First stage: fillers, acknowledgements, greetings, bare follow-ups, explicit-question hints, technical-domain hints, cut-turn detection | `intent/rules.rs`, `intent/text.rs`                                                                                   | 10 unit tests over FR/EN phrases; accents kept where folding is ambiguous ("sûr" vs "sur")                                                                                                                        |
+| Structured classifier: prompt v3, JSON schema (decisive fields first), runtime validation, partial-JSON reader                          | `intent/classifier.rs`, `prompts/classification.v3.md`                                                                | 10 tests: rendering, alias resolution, invalid JSON / unknown enums / extra fields are errors, out-of-range values repaired, partial JSON on every prefix, schema order survives serialization                    |
+| Claude adapter (Haiku 5.5 default / Opus 5.5), streamed, with timings and token usage                                                   | `intent/claude.rs`                                                                                                    | Request-shape tests; SSE reassembly byte by byte (UTF-8 cut); stream errors, refusal and truncation; HTTP tests against a local fake API (headers, retry once on 529, no retry on 401)                            |
+| Follow-up context, continuation → revision, repeat suppression, statement suppression, fallback to rules                                | `intent/detector.rs`                                                                                                  | 13 unit tests                                                                                                                                                                                                     |
+| Engine: two tasks (assembly timers independent of the model), sequential classification, status                                         | `intent/engine.rs`, `audio/commands.rs`                                                                               | 4 tests on a paused clock: order and merge, rules-only without a key, a rejected key switches to rules, a cut turn at stop is still classified                                                                    |
+| Claude key in the Credential Manager (shared `secrets` module)                                                                          | `secrets.rs`, `intent/credentials.rs`, `intent/commands.rs`                                                           | Validation tests; saved from the UI of the user-launched app (2026-10-28), read back by `intent-bench` in another process, accepted by the API (authentication passed; the call failed on billing: no credit yet) |
+| Settings, transcript tags, status strip warning, consent text                                                                           | `QuestionSettings.vue`, `TranscriptPanel.vue`, `AudioStatusStrip.vue`, `ConsentDialog.vue`                            | Component tests; browser check with injected events (tags, merged cut turn, revision, « pas de clé Claude » warning)                                                                                              |
+| Simulated answers for live questions (until Phase 5)                                                                                    | `mockPipeline.answerDetected`, `createSession.ts`                                                                     | Wiring test: one card, completed, a replayed `question.detected` does not answer twice                                                                                                                            |
+| Labeled corpora + harness + latency probe                                                                                               | `contracts/intent-corpus.v1.json`, `contracts/intent-corpus-holdout.v1.json`, `intent/eval.rs`, `bin/intent-bench.rs` | Both corpora validated on load and checked disjoint; oracle model scores 100 %; rules-only floors in a unit test; bench stops at the first key or billing error                                                   |
+
+### Acceptance criteria
+
+| Criterion                                         | Status   | Evidence                                                                                                                                                                                |
+| ------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Short greeting answers                            | ✅ rules | Greetings are decided by the rules at once, as `GREETING_OR_SMALL_TALK` cards; a greeting repeated within 2 min is one card. The answers themselves stay simulated until Phase 5        |
+| Statements rarely trigger answers                 | ✅       | Hold-out: 11/11 statements without a card (Haiku, 2 runs); main corpus 28/28 with v3                                                                                                    |
+| Follow-ups reference the right question           | ✅       | Hold-out: 3/3 (Haiku, 2 runs); main corpus 9/9 with v3; rules alone 0/3 and 2/9                                                                                                         |
+| Incomplete utterances don't re-trigger generation | ✅       | Cut turns are merged before classification (corpus merge 1/1); continuations become `question.revised`, repeats create nothing (tests + oracle run); ambiguous fragments create no card |
+
+### Bugs found while building (fixed, with regression tests)
+
+1. "Oui, bien sûr." was taken for a cut turn: accent folding turned "sûr" into the preposition
+   "sur". Continuation words are now matched with accents kept (`cut_turns_are_recognized`).
+2. Small talk that asks something (« Est-ce que tu m'entends bien ? ») after a greeting was
+   dropped as a repeated greeting. Found by the oracle run on the corpus
+   (`a_greeting_gets_a_card_at_once_and_only_once`).
 
 ## Commands executed (key ones)
 
@@ -248,6 +294,19 @@ pnpm test                                                   # 14 files, 104 test
 scripts/make-smoke-corpus.ps1                               # 12 synthetic WAVs + manifest
 pnpm tauri dev                                              # app boots; consent step on Ctrl+Shift+P
 stt-bench --provider assemblyai --fast-endpoint-ms 400|500|700   # smoke corpus, all pass except p50 (602-635 ms)
+scripts/dev.ps1                                             # (user) live transcription test in the app: OK
+
+# Phase 4
+cargo add reqwest@0.13 (native-tls, json, http2, system-proxy)
+cargo clippy --all-targets --features bench                 # 0 warnings
+cargo test                                                  # 143 passed, 4 ignored (hardware / OS store)
+pnpm check                                                  # lint + typecheck + 16 files, 116 tests passed
+intent-bench --rules-only                                   # recall 93.2 %, statements 85.7 %, intents 78.0 %
+intent-bench --model haiku                                  # prompt v2: recall 100 %, statements 100 %, intents 100 %,
+                                                            #   follow-ups 8/9, p50 1 360 ms / p95 2 542 ms (fails latency)
+intent-bench --probe 10                                     # first token: bare ~750 ms, full ~1 000-1 300 ms
+intent-bench (v3, ×2) / intent-bench --holdout (×2)         # main: 0 errors; hold-out: recall 94 %, 0 false positive
+curl (no key) to api.anthropic.com                          # connect 15-50 ms, rejected request 180-340 ms
 ```
 
 ## How to run
@@ -262,11 +321,11 @@ pnpm test:rust      # Rust unit tests (hardware tests are opt-in, see AUDIO_PIPE
 
 ## Next concrete step
 
-1. **You:** move the AssemblyAI account to a paid plan and opt out of model training before
-   streaming real conversations. So far only synthetic audio has been sent. Optionally, create
-   the Soniox EU project for the fallback comparison.
-2. Record the real corpus: about 150 utterances over loopback and microphone, every speaker
-   consenting, with hesitations and accents. Re-run the harness to tune the fast endpoint
-   (hesitations versus latency) and to compare Soniox.
-3. Phase 4: intent classification on `transcript.final` segments (two-stage, structured JSON,
-   follow-up context, duplicate and debounce logic), replacing the mock question detection.
+1. **You:** a live Phase 4 test with Haiku. In Réglages › Audio › Détecter les questions, select
+   Haiku 5.5 if Opus is still shown (a saved setting keeps its earlier value).
+2. Phase 5: generation in the same streamed call as the classification. It saves a round trip
+   of about 1 s toward the 2 s first-answer target.
+3. **You:** before real interviews, move AssemblyAI to a paid plan and opt out of model
+   training. Check the Anthropic organization's retention settings.
+4. Still open from Phase 3: record the real corpus (it also feeds the intent corpus), compare
+   Soniox, and do the manual microphone and device checks.

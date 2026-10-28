@@ -5,9 +5,9 @@ authorized audio source, detects questions (French, English and mixed French-Eng
 speech), and streams concise answers into a stable floating overlay. Every question gets its own
 card, and answers never overwrite each other.
 
-**Status:** Phase 3. Native audio capture plus streaming transcription (AssemblyAI or Soniox,
-EU endpoints), with a live transcript panel. Question detection and answers are still simulated
-(Phase 4 and 5). See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+**Status:** Phase 4. Native audio capture, streaming transcription (AssemblyAI or Soniox, EU
+endpoints) and question detection (rules + Claude), with a live transcript panel. Answers are
+still simulated (Phase 5). See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Requirements (Windows)
 

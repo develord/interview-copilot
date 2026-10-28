@@ -1,5 +1,7 @@
 pub mod audio;
 pub mod events;
+pub mod intent;
+pub mod secrets;
 mod shortcuts;
 pub mod stt;
 
@@ -42,6 +44,9 @@ pub fn run() {
             stt::commands::stt_key_status,
             stt::commands::stt_set_key,
             stt::commands::stt_clear_key,
+            intent::commands::llm_key_status,
+            intent::commands::llm_set_key,
+            intent::commands::llm_clear_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Interview Copilot");

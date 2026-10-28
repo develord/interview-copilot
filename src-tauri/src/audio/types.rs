@@ -27,6 +27,9 @@ pub struct AudioConfig {
     /// Streams captured audio to a speech-to-text provider when set (Phase 3).
     #[serde(default)]
     pub transcription: Option<crate::stt::types::TranscriptionConfig>,
+    /// Detects questions in the transcripts when set (Phase 4). Needs transcription.
+    #[serde(default)]
+    pub questions: Option<crate::intent::types::QuestionDetectionConfig>,
 }
 
 impl AudioConfig {

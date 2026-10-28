@@ -20,7 +20,9 @@ tauri = { version = "2", features = [] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# preserve_order: the JSON schema sent to Claude lists the decisive fields first, and the model
+# generates fields in schema order (see intent/classifier.rs).
+serde_json = { version = "1", features = ["preserve_order"] }
 cpal = "0.18"
 rtrb = "0.4"
 rubato = "5"
@@ -29,13 +31,22 @@ tokio-tungstenite = { version = "0.30", features = ["native-tls"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 tokio = { version = "1", features = ["sync", "time", "macros", "rt", "net", "io-util"] }
 hound = { version = "3.5", optional = true }
+# Claude Messages API (Phase 4). Native TLS (schannel) like the STT WebSockets; no rustls/aws-lc.
+reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls", "http2", "system-proxy"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
 
 [features]
-# Benchmark harness only (cargo run --features bench --bin stt-bench); not part of the app.
+# Benchmark harnesses only (stt-bench, intent-bench); not part of the app.
 bench = ["dep:hound", "tokio/rt-multi-thread"]
 
 [[bin]]
 name = "stt-bench"
+required-features = ["bench"]
+
+[[bin]]
+name = "intent-bench"
 required-features = ["bench"]
 
 [profile.release]

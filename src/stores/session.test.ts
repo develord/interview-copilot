@@ -74,4 +74,50 @@ describe("session store", () => {
     expect(store.cards).toHaveLength(0);
     expect(store.active).toBeNull();
   });
+
+  it("returns the applied event, and null for malformed or ignored ones", () => {
+    const store = useSessionStore();
+    const detected = { type: "question.detected", question: question("q1", "A") };
+    expect(store.dispatch(detected)?.type).toBe("question.detected");
+    // Replayed: the lifecycle ignores it, so callers must not answer it twice.
+    expect(store.dispatch(detected)).toBeNull();
+    expect(store.dispatch("garbage")).toBeNull();
+  });
+
+  it("keeps the classifier status and each utterance decision until history is cleared", () => {
+    const store = useSessionStore();
+    store.dispatch({
+      type: "classifier.status",
+      state: "rules-only",
+      model: null,
+      error: { code: "missing-key", detail: "no key" },
+      lastLatencyMs: null,
+      classified: 0,
+      failed: 0,
+    });
+    store.dispatch({
+      type: "utterance.classified",
+      utterance: {
+        id: "s1-u1",
+        sourceId: "system",
+        segmentIds: ["system-1-0", "system-1-1"],
+        text: "Et du coup, sur la partie base de données ?",
+        decision: "question",
+        reason: null,
+        intent: "TECHNICAL_QUESTION",
+        stage: "fallback",
+        questionId: "s1-q1",
+        latencyMs: null,
+      },
+    });
+
+    expect(store.classifierStatus?.state).toBe("rules-only");
+    // Keyed by the last segment, where the utterance ends in the transcript.
+    expect(store.utteranceBySegment["system-1-1"]?.questionId).toBe("s1-q1");
+    expect(store.utteranceBySegment["system-1-0"]).toBeUndefined();
+
+    store.clearHistory();
+    expect(store.utteranceBySegment).toEqual({});
+    expect(store.classifierStatus?.state).toBe("rules-only");
+  });
 });

@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "description": "Labeled interview dialogues for question detection (PRD §12). Text only, written to look like punctuated live speech recognition. Interviewer turns are classified; candidate turns are context. expect.respond = a new answer card is expected (true) or must not be created (false); intents lists the acceptable intents; followUpOf lists the turns whose card the new card must reference; revises = the turn must revise that turn's card instead of creating one; repeatOf = no new card; merge = the turn is cut and must end up in the same card as the next interviewer turn. gapMs is the silence before the turn (default 2500).",
+  "dialogues": [
+    {
+      "id": "fr-intro-frontend",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Bonjour Mohamed, merci d'être là.", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Bonjour, merci à vous de me recevoir." },
+        { "id": "t3", "speaker": "interviewer", "text": "Est-ce que tu m'entends bien ?", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } },
+        { "id": "t4", "speaker": "candidate", "text": "Oui, très bien." },
+        { "id": "t5", "speaker": "interviewer", "text": "Parfait. Alors je vais d'abord te présenter rapidement l'équipe. On est six développeurs et on travaille sur une plateforme de réservation en Vue 3 et Node.js.", "expect": { "respond": false } },
+        { "id": "t6", "speaker": "interviewer", "text": "Je te laisse te présenter rapidement.", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION"] } },
+        { "id": "t7", "speaker": "candidate", "text": "Alors, je suis développeur front-end depuis cinq ans, surtout sur Vue et TypeScript, dans une startup de logistique." },
+        { "id": "t8", "speaker": "interviewer", "text": "D'accord, très bien.", "expect": { "respond": false } },
+        { "id": "t9", "speaker": "interviewer", "text": "Euh, et du coup, sur la partie", "expect": { "merge": true } },
+        { "id": "t10", "speaker": "interviewer", "text": "state management, tu utilises quoi aujourd'hui ?", "gapMs": 600, "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "EXPERIENCE_QUESTION"] } },
+        { "id": "t11", "speaker": "candidate", "text": "Principalement Pinia. Avant, on était sur Vuex." },
+        { "id": "t12", "speaker": "interviewer", "text": "Pourquoi ?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP"], "followUpOf": ["t10"] } },
+        { "id": "t13", "speaker": "candidate", "text": "Pinia est plus simple, mieux typé avec TypeScript, et il n'y a plus de mutations." },
+        { "id": "t14", "speaker": "interviewer", "text": "Ok. Et avec la Composition API, tu fais comment pour partager un état entre deux composants qui ne sont pas parents ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"] } },
+        { "id": "t15", "speaker": "candidate", "text": "Soit un store Pinia, soit un composable avec un état partagé au niveau du module." },
+        { "id": "t16", "speaker": "interviewer", "text": "Hmm, c'est intéressant ce que tu dis sur les composables.", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "fr-coding",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "On va passer à un petit exercice de code.", "expect": { "respond": false } },
+        { "id": "t2", "speaker": "interviewer", "text": "Écris une fonction qui prend un tableau de nombres et une cible, et qui retourne les indices des deux nombres dont la somme fait la cible.", "expect": { "respond": true, "intents": ["CODING_PROBLEM"] } },
+        { "id": "t3", "speaker": "candidate", "text": "Pardon, tu peux répéter la question ?" },
+        { "id": "t4", "speaker": "interviewer", "text": "Écris une fonction qui prend un tableau de nombres et une cible, et qui retourne les indices des deux nombres dont la somme fait la cible.", "expect": { "repeatOf": "t2" } },
+        { "id": "t5", "speaker": "candidate", "text": "D'accord. Je parcourrais le tableau en gardant une table de hachage des valeurs déjà vues." },
+        { "id": "t6", "speaker": "interviewer", "text": "Et en termes de complexité, ça donne quoi ?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP", "CODING_PROBLEM"], "followUpOf": ["t2"] } },
+        { "id": "t7", "speaker": "candidate", "text": "Du O de n en temps." },
+        { "id": "t8", "speaker": "interviewer", "text": "Et en mémoire ?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP", "CODING_PROBLEM"], "followUpOf": ["t2", "t6"] } },
+        { "id": "t9", "speaker": "candidate", "text": "O de n aussi, à cause de la table." },
+        { "id": "t10", "speaker": "interviewer", "text": "Comment tu ferais euh… non, pardon, est-ce que tu pourrais le faire sans structure supplémentaire si le tableau est trié ?", "expect": { "respond": true, "intents": ["CODING_PROBLEM", "CLARIFICATION_OR_FOLLOW_UP"] } },
+        { "id": "t11", "speaker": "candidate", "text": "Oui, avec deux pointeurs, un au début et un à la fin." },
+        { "id": "t12", "speaker": "interviewer", "text": "Ok, je vois.", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "en-system-design",
+      "language": "en",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Hi, thanks for joining today.", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Thanks for having me." },
+        { "id": "t3", "speaker": "interviewer", "text": "So today I'd like to focus mostly on system design.", "expect": { "respond": false } },
+        { "id": "t4", "speaker": "interviewer", "text": "How would you design a URL shortener that handles a hundred million redirects per day?", "expect": { "respond": true, "intents": ["SYSTEM_DESIGN"] } },
+        { "id": "t5", "speaker": "candidate", "text": "First I'd clarify the requirements: read-heavy traffic, short codes, analytics maybe." },
+        { "id": "t6", "speaker": "interviewer", "text": "Okay, makes sense.", "expect": { "respond": false } },
+        { "id": "t7", "speaker": "interviewer", "text": "What database would you pick for the mappings, and why?", "expect": { "respond": true, "intents": ["SYSTEM_DESIGN", "TECHNICAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"], "followUpOf": ["t4"] } },
+        { "id": "t8", "speaker": "candidate", "text": "A key-value store like DynamoDB or Cassandra, because lookups are by key only." },
+        { "id": "t9", "speaker": "interviewer", "text": "Hmm, and how would you deal with hot keys?", "expect": { "respond": true, "intents": ["SYSTEM_DESIGN", "CLARIFICATION_OR_FOLLOW_UP", "TECHNICAL_QUESTION"], "followUpOf": ["t4", "t7"] } },
+        { "id": "t10", "speaker": "candidate", "text": "I'd put a cache in front, with a CDN for the most popular links." },
+        { "id": "t11", "speaker": "interviewer", "text": "We actually had an outage last year because of exactly that.", "expect": { "respond": false } },
+        { "id": "t12", "speaker": "interviewer", "text": "Tell me about a time you disagreed with a technical decision on your team.", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION"] } }
+      ]
+    },
+    {
+      "id": "mixed-react",
+      "language": "mixed",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Alors, tu as déjà bossé avec React ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "TECHNICAL_QUESTION"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Oui, deux ans, sur un back-office." },
+        { "id": "t3", "speaker": "interviewer", "text": "Ok, so what's the difference between useMemo and useCallback ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION"] } },
+        { "id": "t4", "speaker": "candidate", "text": "useMemo mémorise une valeur, useCallback mémorise une fonction." },
+        { "id": "t5", "speaker": "interviewer", "text": "Exactement.", "expect": { "respond": false } },
+        { "id": "t6", "speaker": "interviewer", "text": "Et le virtual DOM, c'est quoi exactement selon toi ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION"] } },
+        { "id": "t7", "speaker": "interviewer", "text": "Dans React spécifiquement, je veux dire.", "gapMs": 1500, "expect": { "revises": "t6" } },
+        { "id": "t8", "speaker": "candidate", "text": "C'est une représentation en mémoire de l'arbre, que React compare avant de toucher au vrai DOM." },
+        { "id": "t9", "speaker": "interviewer", "text": "Tu peux me donner un exemple où la reconciliation pose problème ?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP", "TECHNICAL_QUESTION"], "followUpOf": ["t6"] } },
+        { "id": "t10", "speaker": "candidate", "text": "Des listes sans key stable, par exemple." },
+        { "id": "t11", "speaker": "interviewer", "text": "Right, classic.", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "fr-indirect",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "J'aimerais comprendre comment vous avez géré la migration de Vue 2 vers Vue 3.", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "TECHNICAL_QUESTION"] } },
+        { "id": "t2", "speaker": "candidate", "text": "On a migré composant par composant avec le build de compatibilité." },
+        { "id": "t3", "speaker": "interviewer", "text": "Du coup j'imagine que les tests ont dû être un vrai sujet.", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "TECHNICAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"] } },
+        { "id": "t4", "speaker": "candidate", "text": "Oui, on a commencé par couvrir les parcours critiques avec Cypress." },
+        { "id": "t5", "speaker": "interviewer", "text": "Je suis curieux de savoir ce que tu penses de Nuxt.", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION"] } },
+        { "id": "t6", "speaker": "candidate", "text": "C'est pratique pour le SSR, mais ça ajoute une couche de magie." },
+        { "id": "t7", "speaker": "interviewer", "text": "Bon, on est un peu en retard sur le planning, donc on va accélérer.", "expect": { "respond": false } },
+        { "id": "t8", "speaker": "interviewer", "text": "Dernière chose : parle-moi d'un projet dont tu es fier.", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "BEHAVIORAL_QUESTION"] } },
+        { "id": "t9", "speaker": "candidate", "text": "Le moteur de réservation que j'ai refait l'an dernier." },
+        { "id": "t10", "speaker": "interviewer", "text": "Alors euh", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "fr-hr",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Salut, ça va ?", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Ça va bien, et toi ?" },
+        { "id": "t3", "speaker": "interviewer", "text": "Très bien, merci.", "expect": { "respond": false } },
+        { "id": "t4", "speaker": "interviewer", "text": "Quelles sont tes prétentions salariales ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "BEHAVIORAL_QUESTION"] } },
+        { "id": "t5", "speaker": "candidate", "text": "Autour de cinquante-cinq mille euros brut." },
+        { "id": "t6", "speaker": "interviewer", "text": "Et pourquoi tu veux quitter ton poste actuel ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "BEHAVIORAL_QUESTION"] } },
+        { "id": "t7", "speaker": "candidate", "text": "J'ai envie de travailler sur un produit avec plus d'utilisateurs." },
+        { "id": "t8", "speaker": "interviewer", "text": "Quel est ton plus grand défaut ?", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION"] } },
+        { "id": "t9", "speaker": "candidate", "text": "J'ai du mal à déléguer, mais je m'améliore." },
+        { "id": "t10", "speaker": "interviewer", "text": "Ok, on te recontactera d'ici la fin de la semaine.", "expect": { "respond": false } },
+        { "id": "t11", "speaker": "interviewer", "text": "Tu as des questions pour nous ?", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK", "EXPERIENCE_QUESTION", "BEHAVIORAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"] } }
+      ]
+    },
+    {
+      "id": "en-backend",
+      "language": "en",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Can you hear me okay?", "expect": { "respond": true, "intents": ["GREETING_OR_SMALL_TALK"] } },
+        { "id": "t2", "speaker": "candidate", "text": "Yes, loud and clear." },
+        { "id": "t3", "speaker": "interviewer", "text": "Great. Let's talk about APIs.", "expect": { "respond": false } },
+        { "id": "t4", "speaker": "interviewer", "text": "When would you choose gRPC over REST?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION"] } },
+        { "id": "t5", "speaker": "candidate", "text": "For internal service-to-service calls where latency and typed contracts matter." },
+        { "id": "t6", "speaker": "interviewer", "text": "Why?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP"], "followUpOf": ["t4"] } },
+        { "id": "t7", "speaker": "candidate", "text": "HTTP/2 multiplexing and protobuf are cheaper than JSON over HTTP/1.1." },
+        { "id": "t8", "speaker": "interviewer", "text": "And how do you version a public REST API?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"] } },
+        { "id": "t9", "speaker": "candidate", "text": "Sorry, you cut out for a second." },
+        { "id": "t10", "speaker": "interviewer", "text": "I said, how do you version a public REST API?", "expect": { "repeatOf": "t8" } },
+        { "id": "t11", "speaker": "candidate", "text": "Usually with a version in the path, and a deprecation window." },
+        { "id": "t12", "speaker": "interviewer", "text": "Right, right.", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "fr-devops",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Tu as déjà mis en place une CI/CD ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION", "TECHNICAL_QUESTION"] } },
+        { "id": "t2", "speaker": "interviewer", "text": "Avec GitHub Actions ou GitLab CI, peu importe.", "gapMs": 1200, "expect": { "revises": "t1" } },
+        { "id": "t3", "speaker": "candidate", "text": "Oui, avec GitLab CI, build, tests et déploiement sur un cluster." },
+        { "id": "t4", "speaker": "interviewer", "text": "Et Kubernetes, tu connais ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "EXPERIENCE_QUESTION"] } },
+        { "id": "t5", "speaker": "candidate", "text": "Oui, je l'utilise au quotidien." },
+        { "id": "t6", "speaker": "interviewer", "text": "Comment tu gérerais un déploiement blue green sur Kubernetes ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "SYSTEM_DESIGN"] } },
+        { "id": "t7", "speaker": "candidate", "text": "Deux déploiements et on bascule le service de l'un à l'autre." },
+        { "id": "t8", "speaker": "interviewer", "text": "Comment tu gérerais un déploiement canary sur Kubernetes ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "SYSTEM_DESIGN", "CLARIFICATION_OR_FOLLOW_UP"] } },
+        { "id": "t9", "speaker": "candidate", "text": "Avec un pourcentage de trafic routé vers la nouvelle version, par exemple avec un service mesh." },
+        { "id": "t10", "speaker": "interviewer", "text": "On utilise Argo CD et Helm chez nous.", "expect": { "respond": false } }
+      ]
+    },
+    {
+      "id": "mixed-algo",
+      "language": "mixed",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Petite question d'algo maintenant.", "expect": { "respond": false } },
+        { "id": "t2", "speaker": "interviewer", "text": "C'est quoi la complexité d'une recherche dans un binary search tree équilibré ?", "expect": { "respond": true, "intents": ["TECHNICAL_QUESTION", "CODING_PROBLEM"] } },
+        { "id": "t3", "speaker": "candidate", "text": "O de log n." },
+        { "id": "t4", "speaker": "interviewer", "text": "Et dans le pire cas, si l'arbre n'est pas équilibré ?", "expect": { "respond": true, "intents": ["CLARIFICATION_OR_FOLLOW_UP", "TECHNICAL_QUESTION", "CODING_PROBLEM"], "followUpOf": ["t2"] } },
+        { "id": "t5", "speaker": "candidate", "text": "Ça devient linéaire, O de n." },
+        { "id": "t6", "speaker": "interviewer", "text": "Ok, now implement a function that checks whether a binary tree is balanced.", "expect": { "respond": true, "intents": ["CODING_PROBLEM"] } },
+        { "id": "t7", "speaker": "interviewer", "text": "Tu peux le faire en JavaScript ou en Python, comme tu préfères.", "gapMs": 1500, "expect": { "respond": false } },
+        { "id": "t8", "speaker": "candidate", "text": "Je vais le faire en JavaScript, avec une fonction récursive qui renvoie la hauteur." }
+      ]
+    },
+    {
+      "id": "en-behavioral",
+      "language": "en",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Alright, let's switch to some behavioral questions.", "expect": { "respond": false } },
+        { "id": "t2", "speaker": "interviewer", "text": "Tell me about a time you had to deliver under a really tight deadline.", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION"] } },
+        { "id": "t3", "speaker": "candidate", "text": "Last year we had two weeks to ship a payment integration before a partner launch." },
+        { "id": "t4", "speaker": "interviewer", "text": "Mm-hmm.", "expect": { "respond": false } },
+        { "id": "t5", "speaker": "interviewer", "text": "And what would you do differently today?", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION", "CLARIFICATION_OR_FOLLOW_UP"], "followUpOf": ["t2"] } },
+        { "id": "t6", "speaker": "candidate", "text": "I'd push back on the scope much earlier." },
+        { "id": "t7", "speaker": "interviewer", "text": "That's fair. We value that kind of honesty here.", "expect": { "respond": false } },
+        { "id": "t8", "speaker": "interviewer", "text": "What's your biggest strength as an engineer?", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION", "EXPERIENCE_QUESTION"] } },
+        { "id": "t9", "speaker": "candidate", "text": "Probably debugging production issues calmly." },
+        { "id": "t10", "speaker": "interviewer", "text": "Interesting.", "expect": { "respond": false } },
+        { "id": "t11", "speaker": "interviewer", "text": "I'm curious how you handle code reviews when you disagree with a senior engineer.", "expect": { "respond": true, "intents": ["BEHAVIORAL_QUESTION"] } }
+      ]
+    },
+    {
+      "id": "fr-false-friends",
+      "language": "fr",
+      "turns": [
+        { "id": "t1", "speaker": "interviewer", "text": "Je me demandais si on allait avoir le temps, mais ça devrait aller.", "expect": { "respond": false } },
+        { "id": "t2", "speaker": "interviewer", "text": "Qu'est-ce qu'on disait déjà ? Ah oui, les performances.", "expect": { "respond": false } },
+        { "id": "t3", "speaker": "interviewer", "text": "Comment dire… c'est un poste assez polyvalent.", "expect": { "respond": false } },
+        { "id": "t4", "speaker": "interviewer", "text": "Est-ce que tu as déjà travaillé en full remote ?", "expect": { "respond": true, "intents": ["EXPERIENCE_QUESTION"] } },
+        { "id": "t5", "speaker": "candidate", "text": "Oui, pendant deux ans." },
+        { "id": "t6", "speaker": "interviewer", "text": "Pourquoi pas, c'est une bonne idée.", "expect": { "respond": false } },
+        { "id": "t7", "speaker": "interviewer", "text": "Super.", "expect": { "respond": false } }
+      ]
+    }
+  ]
+}

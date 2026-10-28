@@ -265,6 +265,7 @@ mod tests {
             },
             microphone: SourceConfig::default(),
             transcription: None,
+            questions: None,
         }
     }
 

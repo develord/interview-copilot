@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { reactive, toRefs, watch } from "vue";
 import { z } from "zod";
+import { CLAUDE_MODELS } from "@/domain/intent";
 import { inTauri } from "@/platform/overlayWindow";
 
 const STORAGE_KEY = "interview-copilot.overlay-settings.v1";
@@ -55,6 +56,15 @@ const settingsSchema = z.object({
       builtinVocabulary: true,
       fastEndpoint: true,
     }),
+  questions: z
+    .object({
+      /** Detect questions in the live transcript (needs transcription). */
+      enabled: z.boolean().catch(true),
+      model: z.enum(CLAUDE_MODELS).catch("claude-haiku-5-5"),
+      /** Also treat microphone speech as questions, for testing without an interviewer. */
+      includeMicrophone: z.boolean().catch(false),
+    })
+    .catch({ enabled: true, model: "claude-haiku-5-5", includeMicrophone: false }),
 });
 export type OverlaySettings = z.infer<typeof settingsSchema>;
 export type CardOrder = OverlaySettings["order"];

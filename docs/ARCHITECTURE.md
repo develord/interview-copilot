@@ -1,6 +1,6 @@
 # Architecture
 
-Status: Phase 3 (overlay + native audio capture + streaming STT; questions/answers still simulated). See
+Status: Phase 4 (overlay + native audio capture + streaming STT + question detection; answers still simulated). See
 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for what is verified.
 
 ## Guiding rule
@@ -33,6 +33,7 @@ answer from overwriting a newer one.
 │ shortcuts.rs   global shortcuts (with fallbacks + conflict report)              │
 │ window-state   restores size/position per monitor                              │
 │ audio/ → stt/  WASAPI loopback + mic → 16 kHz → AssemblyAI | Soniox (EU WSS)   │
+│ stt/ → intent/ utterances → rules → Claude (HTTPS, structured JSON) → questions │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -69,8 +70,8 @@ The rules are documented in [UI_STATE_MACHINE.md](UI_STATE_MACHINE.md) and enfor
 - CSP: `default-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data:`.
 - Capabilities (`src-tauri/capabilities/overlay.json`): `core:default` plus only the window setters
   the overlay uses (drag, resize, size, position, always-on-top, minimize, close).
-- No credentials exist yet. When providers are added, API keys live in the OS credential store and
-  are used from Rust only — the webview never sees them.
+- Provider keys (STT, Claude) live in the OS credential store and are used from Rust only:
+  the webview can store or delete them, never read them.
 - The app does not implement anything intended to hide from screen capture or bypass interview
   platform monitoring (PRD §11).
 
@@ -81,9 +82,13 @@ The rules are documented in [UI_STATE_MACHINE.md](UI_STATE_MACHINE.md) and enfor
 - **Phase 3 (done, provider validation pending):** `SttProvider` + `Codec` adapters fed by a
   `FrameSink`; `transcript.partial/final` and `stt.status` events; keys in the Credential
   Manager; consent step. Details: [TRANSCRIPTION.md](TRANSCRIPTION.md).
-- **Phase 4–5:** classifier and answer engine. The orchestrator moves to Rust (or a Rust-hosted
-  service) and emits `PipelineEvent`s through Tauri events; a `TauriSessionController` replaces
-  `MockPipeline` in `src/main.ts`. No component changes are expected.
+- **Phase 4 (done and measured; Haiku 5.5; latency ~1.2 s, above the PRD target):** question detection runs in Rust next
+  to the STT sessions: assembler → rules → Claude classifier, emitting `question.detected`,
+  `question.revised`, `utterance.classified` and `classifier.status`. The Claude key is in the
+  Credential Manager. Details: [QUESTION_DETECTION.md](QUESTION_DETECTION.md).
+- **Phase 5:** answer engine in Rust, streaming `answer.*` events for the detected questions;
+  it replaces the simulated answers from `MockPipeline`. No card component changes are
+  expected.
 - **History growth:** the list is not virtualized yet (fine for a session's worth of cards). Add
   virtualization when measured render cost requires it; card keys and scroll policy already
   support it.

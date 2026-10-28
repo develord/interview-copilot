@@ -3,6 +3,7 @@ import { computed } from "vue";
 import Icon, { type IconName } from "@/components/icons/Icon";
 import {
   AUDIO_ERROR_LABEL,
+  CLASSIFY_ERROR_LABEL,
   PROVIDER_LABEL,
   SOURCE_LABEL,
   SOURCE_STATE_LABEL,
@@ -30,6 +31,11 @@ const failing = computed(() => store.audioSources.filter((s) => s.error !== null
 const sttProblems = computed(() =>
   Object.values(store.sttStatus).filter((s) => s.error !== null && s.state !== "closed"),
 );
+/** Question detection running without the model, with the reason. */
+const classifierProblem = computed(() => {
+  const status = store.classifierStatus;
+  return status && status.state !== "ready" && status.error ? status.error : null;
+});
 const visible = computed(
   () =>
     settings.sessionMode === "live" &&
@@ -142,6 +148,12 @@ async function openPrivacySettings() {
         <template v-if="s.state === 'reconnecting'"> — reconnexion…</template>
       </span>
     </p>
+    <p v-if="classifierProblem && store.status !== 'idle'" class="audio-error warn" role="status">
+      <Icon name="alert" :size="13" />
+      <span :title="classifierProblem.detail">
+        Questions : {{ CLASSIFY_ERROR_LABEL[classifierProblem.code] }}
+      </span>
+    </p>
   </section>
 </template>
 
@@ -223,6 +235,9 @@ async function openPrivacySettings() {
 .audio-error span {
   flex: 1;
   min-width: 0;
+}
+.audio-error.warn {
+  color: var(--warn);
 }
 .link {
   flex: none;

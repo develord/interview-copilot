@@ -114,4 +114,25 @@ describe("AudioStatusStrip", () => {
     settings.sessionMode = "demo";
     expect(wrapper.find(".audio-strip").exists()).toBe(false);
   });
+
+  it("says when question detection runs without Claude, and why", async () => {
+    const { wrapper, store } = setup([diagnostics({})]);
+    const status = (state: string, code: string | null) => ({
+      type: "classifier.status",
+      state,
+      model: state === "rules-only" ? null : "claude-opus-5-5",
+      error: code ? { code, detail: "detail" } : null,
+      lastLatencyMs: null,
+      classified: 0,
+      failed: 0,
+    });
+
+    store.dispatch(status("rules-only", "missing-key"));
+    await flushPromises();
+    expect(wrapper.text()).toContain("pas de clé Claude");
+
+    store.dispatch(status("ready", null));
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Questions :");
+  });
 });

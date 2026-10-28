@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from "vue";
 import Icon from "@/components/icons/Icon";
-import { PROVIDER_LABEL, STT_STATE_LABEL } from "@/components/cards/labels";
+import {
+  CLASSIFIER_STATE_LABEL,
+  IGNORE_REASON_LABEL,
+  INTENT_META,
+  PROVIDER_LABEL,
+  STT_STATE_LABEL,
+} from "@/components/cards/labels";
+import type { UtteranceReport } from "@/domain/intent";
 import { useStickyScroll } from "@/composables/useStickyScroll";
 import { useOverlaySettings } from "@/stores/overlaySettings";
 import { useSessionStore } from "@/stores/session";
@@ -29,8 +36,35 @@ const summary = computed(() => {
     .filter((ms): ms is number => ms !== null)
     .at(0);
   const state = STT_STATE_LABEL[first.state];
-  return `${PROVIDER_LABEL[first.provider]} · ${state}${latency !== undefined ? ` · ≈${latency} ms` : ""}`;
+  const classifier = store.classifierStatus;
+  const detection = classifier
+    ? ` · questions : ${CLASSIFIER_STATE_LABEL[classifier.state]}${
+        classifier.state === "ready" && classifier.lastLatencyMs !== null
+          ? ` ≈${classifier.lastLatencyMs} ms`
+          : ""
+      }`
+    : "";
+  return `${PROVIDER_LABEL[first.provider]} · ${state}${latency !== undefined ? ` · ≈${latency} ms` : ""}${detection}`;
 });
+
+/** Short tag for the decision taken on the utterance that ends with this line. */
+function tag(report: UtteranceReport): { text: string; kind: string; title: string } {
+  const how =
+    report.stage === "llm"
+      ? `Claude${report.latencyMs !== null ? `, ${report.latencyMs} ms` : ""}`
+      : report.stage === "rules"
+        ? "règles"
+        : "règles (Claude indisponible)";
+  if (report.decision === "question") {
+    const intent = report.intent ? INTENT_META[report.intent].label : "Question";
+    return { text: `Question · ${intent}`, kind: "question", title: how };
+  }
+  if (report.decision === "revision") {
+    return { text: "Précision de la question", kind: "revision", title: how };
+  }
+  const reason = report.reason ? IGNORE_REASON_LABEL[report.reason] : "ignoré";
+  return { text: `Ignoré · ${reason}`, kind: "ignored", title: how };
+}
 
 const scroller = useTemplateRef<HTMLElement>("scroller");
 const content = useTemplateRef<HTMLElement>("content");
@@ -67,7 +101,16 @@ useStickyScroll(
           :data-source="line.sourceId"
         >
           <span class="who">{{ line.sourceId === "system" ? "Interlocuteur" : "Vous" }}</span>
-          <span class="text">{{ line.text }}</span>
+          <span class="text"
+            >{{ line.text }}
+            <span
+              v-if="store.utteranceBySegment[line.id]"
+              class="tag"
+              :class="`tag-${tag(store.utteranceBySegment[line.id]!).kind}`"
+              :title="tag(store.utteranceBySegment[line.id]!).title"
+              >{{ tag(store.utteranceBySegment[line.id]!).text }}</span
+            ></span
+          >
         </p>
       </div>
     </div>
@@ -132,5 +175,29 @@ useStickyScroll(
 .line.partial .text {
   color: var(--text-3);
   font-style: italic;
+}
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.tag-question {
+  background: rgb(110 168 254 / 0.18);
+  color: var(--accent);
+}
+.tag-revision {
+  background: rgb(255 196 87 / 0.16);
+  color: var(--warn);
+}
+.tag-ignored {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--text-3);
 }
 </style>

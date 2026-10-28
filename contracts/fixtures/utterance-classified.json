@@ -1,0 +1,15 @@
+{
+  "type": "utterance.classified",
+  "utterance": {
+    "id": "session-1761649200000-u5",
+    "sourceId": "system",
+    "segmentIds": ["system-1-6"],
+    "text": "On utilise Kafka chez nous.",
+    "decision": "ignored",
+    "reason": "statement",
+    "intent": "NON_QUESTION_STATEMENT",
+    "stage": "llm",
+    "questionId": null,
+    "latencyMs": 640
+  }
+}

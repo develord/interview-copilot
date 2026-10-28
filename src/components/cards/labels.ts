@@ -1,4 +1,10 @@
 import type { AudioErrorCode, SourceKind, SourceState } from "@/domain/audio";
+import type {
+  ClaudeModel,
+  ClassifierState,
+  ClassifyErrorCode,
+  UtteranceIgnoreReason,
+} from "@/domain/intent";
 import type { ProviderKind, SttErrorCode, SttState } from "@/domain/stt";
 import type { AnswerStatus, Intent, Language, SessionStatus } from "@/domain/types";
 
@@ -88,4 +94,44 @@ export const STT_ERROR_LABEL: Record<SttErrorCode, string> = {
   network: "connexion perdue",
   protocol: "réponse inattendue du service",
   provider: "erreur du service de transcription",
+};
+
+export const CLAUDE_MODEL_LABEL: Record<ClaudeModel, { name: string; hint: string }> = {
+  "claude-haiku-5-5": {
+    name: "Haiku 5.5",
+    hint: "Recommandé : le plus rapide (≈ 1,2 s), environ 40 fois moins cher qu'Opus, 94 à 100 % de bonnes décisions sur nos dialogues de test.",
+  },
+  "claude-opus-5-5": {
+    name: "Opus 5.5",
+    hint: "Plus de jugement en théorie, mais plus lent (il réfléchit toujours avant de répondre) et plus cher.",
+  },
+};
+
+export const CLASSIFIER_STATE_LABEL: Record<ClassifierState, string> = {
+  ready: "Claude",
+  "rules-only": "règles seules",
+  degraded: "Claude indisponible, règles",
+  error: "règles seules",
+};
+
+export const CLASSIFY_ERROR_LABEL: Record<ClassifyErrorCode, string> = {
+  "missing-key": "pas de clé Claude : seules les questions explicites sont détectées",
+  unauthorized: "clé Claude refusée : détection par règles seules",
+  quota: "crédit Claude épuisé : détection par règles seules",
+  "rate-limited": "Claude limite les requêtes : détection par règles en attendant",
+  overloaded: "Claude surchargé : détection par règles en attendant",
+  network: "Claude injoignable : détection par règles en attendant",
+  timeout: "Claude trop lent : détection par règles en attendant",
+  "invalid-response": "réponse inattendue de Claude : détection par règles",
+  refused: "Claude a refusé d'analyser une phrase",
+  protocol: "requête refusée par Claude (mise à jour nécessaire ?)",
+  "credential-store": "Gestionnaire d'identification Windows indisponible",
+};
+
+export const IGNORE_REASON_LABEL: Record<UtteranceIgnoreReason, string> = {
+  filler: "hésitation",
+  backchannel: "acquiescement",
+  statement: "affirmation",
+  ambiguous: "en attente de contexte",
+  repeat: "question répétée",
 };

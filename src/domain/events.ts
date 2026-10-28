@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sourceDiagnosticsSchema } from "./audio";
+import { classifierStatusSchema, utteranceReportSchema } from "./intent";
 import { sttStatusSchema } from "./stt";
 import { ANSWER_SECTIONS, INTENTS, LANGUAGES, QUESTION_SOURCES, SESSION_STATUSES } from "./types";
 
@@ -57,6 +58,9 @@ export const pipelineEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("transcript.final"), segment: transcriptSegmentSchema }),
   z.object({ type: z.literal("question.detected"), question: detectedQuestionSchema }),
   z.object({ type: z.literal("question.revised"), questionId: id, text: text.min(1) }),
+  /** Diagnostics: what became of one interviewer utterance (question, revision or ignored). */
+  z.object({ type: z.literal("utterance.classified"), utterance: utteranceReportSchema }),
+  z.object({ type: z.literal("classifier.status") }).extend(classifierStatusSchema.shape),
   z.object({ type: z.literal("answer.started"), questionId: id, requestId: id }),
   z.object({
     type: z.literal("answer.delta"),

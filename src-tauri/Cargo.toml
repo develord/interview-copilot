@@ -1,0 +1,46 @@
+[package]
+name = "interview-copilot"
+version = "0.1.0"
+description = "Real-time interview copilot overlay"
+authors = ["Interview Copilot contributors"]
+edition = "2024"
+default-run = "interview-copilot"
+
+[lib]
+# The `_lib` suffix avoids a name clash between the lib and bin targets on Windows
+# (https://github.com/rust-lang/cargo/issues/8519).
+name = "interview_copilot_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-window-state = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+cpal = "0.18"
+rtrb = "0.4"
+rubato = "5"
+keyring = "4"
+tokio-tungstenite = { version = "0.30", features = ["native-tls"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "rt", "net", "io-util"] }
+hound = { version = "3.5", optional = true }
+
+[features]
+# Benchmark harness only (cargo run --features bench --bin stt-bench); not part of the app.
+bench = ["dep:hound", "tokio/rt-multi-thread"]
+
+[[bin]]
+name = "stt-bench"
+required-features = ["bench"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

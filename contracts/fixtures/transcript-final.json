@@ -1,0 +1,15 @@
+{
+  "type": "transcript.final",
+  "segment": {
+    "id": "system-1-0",
+    "sessionId": "session-1761649200000",
+    "sourceId": "system",
+    "startMs": 1200,
+    "endMs": 3450,
+    "text": "Comment tu gères le state management dans Vue ?",
+    "normalizedText": null,
+    "isFinal": true,
+    "confidence": 0.5,
+    "speakerId": null
+  }
+}

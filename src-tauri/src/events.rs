@@ -1,0 +1,136 @@
+//! Pipeline events sent to the webview. They mirror `src/domain/events.ts`, where every payload
+//! is validated again before it reaches UI state. Shared JSON fixtures in `contracts/fixtures`
+//! are checked from both sides.
+
+use serde::Serialize;
+
+use crate::audio::types::SourceDiagnostics;
+use crate::stt::types::{SttStatus, TranscriptSegment};
+
+/// Tauri event name carrying every `PipelineEvent`.
+pub const PIPELINE_EVENT: &str = "pipeline:event";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionStatus {
+    Idle,
+    Listening,
+    Paused,
+    Reconnecting,
+    Error,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "type")]
+pub enum PipelineEvent {
+    #[serde(rename = "session.status")]
+    SessionStatus {
+        status: SessionStatus,
+        message: Option<String>,
+    },
+    #[serde(rename = "audio.diagnostics")]
+    AudioDiagnostics { sources: Vec<SourceDiagnostics> },
+    #[serde(rename = "transcript.partial")]
+    TranscriptPartial { segment: TranscriptSegment },
+    #[serde(rename = "transcript.final")]
+    TranscriptFinal { segment: TranscriptSegment },
+    #[serde(rename = "stt.status")]
+    SttStatus(SttStatus),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::types::{AudioError, AudioErrorCode, SourceKind, SourceState};
+
+    fn fixture(name: &str) -> serde_json::Value {
+        let path = format!(
+            "{}/../contracts/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        serde_json::from_str(&text).unwrap()
+    }
+
+    #[test]
+    fn audio_diagnostics_match_the_shared_contract_fixture() {
+        let mut system = SourceDiagnostics::new(SourceKind::System, true);
+        system.state = SourceState::Capturing;
+        system.device_name = Some("Speakers (Realtek(R) Audio)".into());
+        system.sample_rate = Some(48_000);
+        system.channels = Some(2);
+        system.level_dbfs = -23.5;
+        system.peak_dbfs = -12.25;
+        system.receiving = true;
+        system.captured_seconds = 12.5;
+
+        let mut microphone = SourceDiagnostics::new(SourceKind::Microphone, false);
+        microphone.state = SourceState::Error;
+        microphone.error = Some(AudioError::new(
+            AudioErrorCode::PermissionDenied,
+            "Access is denied. (os error -2147024891)",
+        ));
+
+        let event = PipelineEvent::AudioDiagnostics {
+            sources: vec![system, microphone],
+        };
+        assert_eq!(
+            serde_json::to_value(&event).unwrap(),
+            fixture("audio-diagnostics.json")
+        );
+    }
+
+    #[test]
+    fn transcript_final_matches_the_shared_contract_fixture() {
+        let event = PipelineEvent::TranscriptFinal {
+            segment: TranscriptSegment {
+                id: "system-1-0".into(),
+                session_id: "session-1761649200000".into(),
+                source_id: "system".into(),
+                start_ms: 1200,
+                end_ms: 3450,
+                text: "Comment tu gères le state management dans Vue ?".into(),
+                normalized_text: None,
+                is_final: true,
+                confidence: Some(0.5),
+                speaker_id: None,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&event).unwrap(),
+            fixture("transcript-final.json")
+        );
+    }
+
+    #[test]
+    fn stt_status_matches_the_shared_contract_fixture() {
+        use crate::stt::types::{ProviderKind, SttError, SttErrorCode, SttState};
+        let event = PipelineEvent::SttStatus(SttStatus {
+            source: SourceKind::Microphone,
+            provider: ProviderKind::Assemblyai,
+            state: SttState::Reconnecting,
+            error: Some(SttError::new(
+                SttErrorCode::Network,
+                "connection closed by the server",
+            )),
+            last_final_latency_ms: Some(420),
+            dropped_chunks: 3,
+        });
+        assert_eq!(
+            serde_json::to_value(&event).unwrap(),
+            fixture("stt-status.json")
+        );
+    }
+
+    #[test]
+    fn session_status_matches_the_shared_contract_fixture() {
+        let event = PipelineEvent::SessionStatus {
+            status: SessionStatus::Reconnecting,
+            message: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&event).unwrap(),
+            fixture("session-status.json")
+        );
+    }
+}

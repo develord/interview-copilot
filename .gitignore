@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules
+dist
+dist-ssr
+coverage
+*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.sw?
+
+# Benchmark corpora contain voices; never commit them by accident
+corpus/
+bench-*.json

@@ -1,0 +1,207 @@
+:root {
+  /* Surface opacity is driven by the settings slider; text always stays fully opaque. */
+  --surface-alpha: 1;
+  --bg-rgb: 14 16 21;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.14);
+  --raise: rgb(255 255 255 / 0.04);
+  --raise-hover: rgb(255 255 255 / 0.07);
+  --text: #e8eaef;
+  --text-2: #a9b0bd;
+  --text-3: #727a8a;
+  --accent: #8ab4ff;
+  --live: #ff5f57;
+  --ok: #46d39a;
+  --warn: #f2b94b;
+  --danger: #ff6b6b;
+  --code-bg: rgb(0 0 0 / 0.38);
+  --radius: 14px;
+  --radius-sm: 9px;
+
+  --tone-blue: #7aa7ff;
+  --tone-violet: #b59dff;
+  --tone-teal: #4fd1c5;
+  --tone-amber: #f2b94b;
+  --tone-pink: #f78fb3;
+  --tone-green: #5fd38d;
+  --tone-slate: #94a3b8;
+
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", monospace;
+
+  color-scheme: dark;
+  font: 13.5px/1.5 var(--font-ui);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  /* The native window is transparent; the overlay panel draws its own background. */
+  background: transparent;
+  overflow: hidden;
+}
+
+/* The panel must fill the whole native window: transparent areas would still swallow clicks. */
+#app {
+  height: 100%;
+}
+
+/* Outside Tauri (plain browser dev server) show the overlay as a phone-sized panel. */
+html.is-browser body {
+  background: radial-gradient(circle at 30% 20%, #1d2330, #0a0c10 70%);
+}
+html.is-browser #app {
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 16px 0;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: rgb(138 180 255 / 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 0.22);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-2);
+  transition:
+    background 120ms,
+    color 120ms;
+}
+.icon-btn:hover {
+  background: var(--raise-hover);
+  color: var(--text);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.icon-btn.danger:hover {
+  background: rgb(255 95 87 / 0.18);
+  color: #ffd0cd;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--raise);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--raise-hover);
+}
+.btn.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #0d1424;
+}
+.btn.primary:hover {
+  filter: brightness(1.08);
+}
+
+.chip {
+  --tone: var(--tone-slate);
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tone) 16%, transparent);
+  color: var(--tone);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.tone-blue {
+  --tone: var(--tone-blue);
+}
+.tone-violet {
+  --tone: var(--tone-violet);
+}
+.tone-teal {
+  --tone: var(--tone-teal);
+}
+.tone-amber {
+  --tone: var(--tone-amber);
+}
+.tone-pink {
+  --tone: var(--tone-pink);
+}
+.tone-green {
+  --tone: var(--tone-green);
+}
+.tone-slate {
+  --tone: var(--tone-slate);
+}
+
+.eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

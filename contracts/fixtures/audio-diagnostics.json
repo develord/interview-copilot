@@ -1,0 +1,38 @@
+{
+  "type": "audio.diagnostics",
+  "sources": [
+    {
+      "source": "system",
+      "state": "capturing",
+      "deviceName": "Speakers (Realtek(R) Audio)",
+      "followsDefault": true,
+      "sampleRate": 48000,
+      "channels": 2,
+      "levelDbfs": -23.5,
+      "peakDbfs": -12.25,
+      "receiving": true,
+      "capturedSeconds": 12.5,
+      "droppedFrames": 0,
+      "recoveries": 0,
+      "error": null
+    },
+    {
+      "source": "microphone",
+      "state": "error",
+      "deviceName": null,
+      "followsDefault": false,
+      "sampleRate": null,
+      "channels": null,
+      "levelDbfs": -100.0,
+      "peakDbfs": -100.0,
+      "receiving": false,
+      "capturedSeconds": 0.0,
+      "droppedFrames": 0,
+      "recoveries": 0,
+      "error": {
+        "code": "permission-denied",
+        "detail": "Access is denied. (os error -2147024891)"
+      }
+    }
+  ]
+}

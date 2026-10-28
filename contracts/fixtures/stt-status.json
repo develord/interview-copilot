@@ -1,0 +1,12 @@
+{
+  "type": "stt.status",
+  "source": "microphone",
+  "provider": "assemblyai",
+  "state": "reconnecting",
+  "error": {
+    "code": "network",
+    "detail": "connection closed by the server"
+  },
+  "lastFinalLatencyMs": 420,
+  "droppedChunks": 3
+}

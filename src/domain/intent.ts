@@ -19,6 +19,7 @@ export const IGNORE_REASONS = [
   "statement",
   "ambiguous",
   "repeat",
+  "not-technical",
 ] as const;
 export type UtteranceIgnoreReason = (typeof IGNORE_REASONS)[number];
 
@@ -82,6 +83,7 @@ export type LlmKeyStatus = z.infer<typeof llmKeyStatusSchema>;
 export interface QuestionDetectionConfig {
   model: ClaudeModel;
   includeMicrophone: boolean;
+  technicalOnly: boolean;
 }
 
 export function asClassifyError(value: unknown): ClassifyError {

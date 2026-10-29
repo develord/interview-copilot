@@ -38,6 +38,9 @@ pub struct DetectorConfig {
     pub follow_up_window_ms: u64,
     /// The same words again within this window are a repeat, not a new question.
     pub repeat_window_ms: u64,
+    /// Only technical questions and follow-ups on them become cards. The others are still
+    /// tracked, so their repeats and follow-ups are recognised, and reported as `not-technical`.
+    pub technical_only: bool,
 }
 
 impl DetectorConfig {
@@ -47,6 +50,7 @@ impl DetectorConfig {
         recent_questions: 6,
         follow_up_window_ms: 180_000,
         repeat_window_ms: 120_000,
+        technical_only: false,
     };
 }
 
@@ -58,6 +62,8 @@ struct Tracked {
     /// Folded words of the original utterance, for exact-repeat detection.
     key: Vec<String>,
     at: u64,
+    /// Got a card (always, unless `technical_only` left it out).
+    shown: bool,
 }
 
 /// A classification waiting for the model.
@@ -217,17 +223,14 @@ impl Detector {
                     now,
                     wall_ms,
                 );
-                let id = question.id.clone();
-                Step::Done(vec![
-                    PipelineEvent::QuestionDetected { question },
-                    classified(report(
-                        Decision::Question,
-                        None,
-                        Some(Intent::GreetingOrSmallTalk),
-                        Stage::Rules,
-                        Some(id),
-                    )),
-                ])
+                let report = report(
+                    Decision::Question,
+                    None,
+                    Some(Intent::GreetingOrSmallTalk),
+                    Stage::Rules,
+                    None,
+                );
+                Step::Done(self.announce(question, report))
             }
             Verdict::FollowUp => {
                 let question = self.create(
@@ -241,17 +244,14 @@ impl Detector {
                     now,
                     wall_ms,
                 );
-                let id = question.id.clone();
-                Step::Done(vec![
-                    PipelineEvent::QuestionDetected { question },
-                    classified(report(
-                        Decision::Question,
-                        None,
-                        Some(Intent::ClarificationOrFollowUp),
-                        Stage::Rules,
-                        Some(id),
-                    )),
-                ])
+                let report = report(
+                    Decision::Question,
+                    None,
+                    Some(Intent::ClarificationOrFollowUp),
+                    Stage::Rules,
+                    None,
+                );
+                Step::Done(self.announce(question, report))
             }
             Verdict::Escalate(hints) => {
                 let key = repeat_key(&text);
@@ -315,7 +315,8 @@ impl Detector {
                 report.question_id = Some(earlier);
                 vec![classified(report)]
             }
-            (Relation::Continuation, Some(target)) => {
+            // A question left out has no card to revise: the completed one is judged anew.
+            (Relation::Continuation, Some(target)) if !self.hidden(&target) => {
                 if let Some(tracked) = self.questions.iter_mut().find(|q| q.id == target) {
                     tracked.question = c.question.clone();
                 }
@@ -354,12 +355,7 @@ impl Detector {
                     now,
                     wall_ms,
                 );
-                report.decision = Decision::Question;
-                report.question_id = Some(question.id.clone());
-                vec![
-                    PipelineEvent::QuestionDetected { question },
-                    classified(report),
-                ]
+                self.announce(question, report)
             }
         }
     }
@@ -373,7 +369,7 @@ impl Detector {
         wall_ms: u64,
     ) -> Vec<PipelineEvent> {
         let hints = pending.hints;
-        let mut report = UtteranceReport {
+        let report = UtteranceReport {
             id: pending.utterance_id,
             source_id: source_id(pending.utterance.source).to_string(),
             segment_ids: pending.utterance.segment_ids.clone(),
@@ -399,6 +395,20 @@ impl Detector {
             now,
             wall_ms,
         );
+        self.announce(question, report)
+    }
+
+    /// The card of a question just created, or, when it is out of scope, only its report.
+    fn announce(
+        &self,
+        question: DetectedQuestion,
+        mut report: UtteranceReport,
+    ) -> Vec<PipelineEvent> {
+        if self.hidden(&question.id) {
+            report.decision = Decision::Ignored;
+            report.reason = Some(IgnoreReason::NotTechnical);
+            return vec![classified(report)];
+        }
         report.decision = Decision::Question;
         report.reason = None;
         report.question_id = Some(question.id.clone());
@@ -406,6 +416,21 @@ impl Detector {
             PipelineEvent::QuestionDetected { question },
             classified(report),
         ]
+    }
+
+    /// A tracked question that got no card.
+    fn hidden(&self, id: &str) -> bool {
+        self.questions.iter().any(|q| q.id == id && !q.shown)
+    }
+
+    /// Everything gets a card, or with `technical_only`, technical questions and follow-ups on
+    /// a question that has one.
+    fn in_scope(&self, intent: Intent, context_ref: Option<&str>) -> bool {
+        if !self.config.technical_only || intent.is_technical() {
+            return true;
+        }
+        intent == Intent::ClarificationOrFollowUp
+            && context_ref.is_some_and(|r| self.questions.iter().any(|q| q.id == r && q.shown))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -421,6 +446,9 @@ impl Detector {
         now: u64,
         wall_ms: u64,
     ) -> DetectedQuestion {
+        let shown = self.in_scope(intent, context_ref.as_deref());
+        // A card never refers to a question that has none.
+        let context_ref = context_ref.filter(|r| !self.hidden(r));
         self.next_question += 1;
         let id = format!("{}-q{}", self.session_id, self.next_question);
         self.questions.push_back(Tracked {
@@ -429,6 +457,7 @@ impl Detector {
             intent,
             key: repeat_key(original),
             at: now,
+            shown,
         });
         while self.questions.len() > self.config.recent_questions {
             self.questions.pop_front();
@@ -852,6 +881,58 @@ mod tests {
         let r = report(&events);
         assert_eq!(r.stage, Stage::Fallback);
         assert_eq!(r.latency_ms, Some(10_000));
+    }
+
+    #[test]
+    fn technical_only_leaves_out_other_questions_and_their_follow_ups() {
+        let mut d = Detector::new(
+            SESSION,
+            DetectorConfig {
+                technical_only: true,
+                ..DetectorConfig::DEFAULT
+            },
+            true,
+        );
+        let greeting =
+            done(d.on_utterance(interviewer("s-1-0", "Bonjour, merci d'être là."), 0, 0));
+        assert!(detected(&greeting).is_empty());
+        assert_eq!(report(&greeting).decision, Decision::Ignored);
+        assert_eq!(report(&greeting).reason, Some(IgnoreReason::NotTechnical));
+
+        let p = pending(d.on_utterance(
+            interviewer("s-1-1", "Parle-moi d'un conflit dans ton équipe."),
+            10,
+            0,
+        ));
+        let behavioral = d.resolve(
+            p,
+            Ok(classification(
+                Intent::BehavioralQuestion,
+                true,
+                Relation::New,
+            )),
+            1,
+            10,
+            0,
+        );
+        assert!(detected(&behavioral).is_empty());
+        assert_eq!(report(&behavioral).intent, Some(Intent::BehavioralQuestion));
+        // Its follow-up is left out too.
+        let why = done(d.on_utterance(interviewer("s-1-2", "Et pourquoi ?"), 20, 0));
+        assert_eq!(report(&why).reason, Some(IgnoreReason::NotTechnical));
+
+        let first = ask(
+            &mut d,
+            "s-1-3",
+            "Comment fonctionne l'event loop ?",
+            Intent::TechnicalQuestion,
+            30,
+        );
+        let why = done(d.on_utterance(interviewer("s-1-4", "Et pourquoi ?"), 40, 0));
+        assert_eq!(
+            detected(&why)[0].context_ref.as_deref(),
+            Some(first.as_str())
+        );
     }
 
     #[test]

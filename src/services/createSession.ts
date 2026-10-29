@@ -111,6 +111,8 @@ export function audioConfig(settings: Dependencies["settings"]): AudioConfig {
         }
       : null,
     questions:
-      t.enabled && q.enabled ? { model: q.model, includeMicrophone: q.includeMicrophone } : null,
+      t.enabled && q.enabled
+        ? { model: q.model, includeMicrophone: q.includeMicrophone, technicalOnly: q.technicalOnly }
+        : null,
   };
 }

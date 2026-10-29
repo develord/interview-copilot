@@ -2,8 +2,9 @@
 
 Real-time desktop copilot for technical and professional conversations. It listens to an
 authorized audio source, detects questions (French, English and mixed French-English technical
-speech), and streams concise answers into a stable floating overlay. Every question gets its own
-card, and answers never overwrite each other.
+speech), and streams concise answers into a stable floating overlay. By default only technical
+questions (and follow-ups on them) are answered. Each one gets its own card, and answers never
+overwrite each other.
 
 **Status:** Phase 6. Native audio capture, streaming transcription (AssemblyAI or Soniox,
 EU endpoints), question detection (rules + Claude Haiku) and streamed answers (Claude Sonnet)

@@ -31,7 +31,11 @@ answer_ask_manual (overlay text field) ─────────────�
 - **Revisions.** A `question.revised` restarts the answer while it is still being written. A
   completed answer is immutable; the card records the revision instead (rule 4).
 - **Manual questions** are sent to Rust in live mode. They get their intent from the first-stage
-  rules, `source: "manual"`, and the same answer path. The demo mode keeps the mock pipeline.
+  rules, `source: "manual"`, and the same answer path, whatever their intent. The demo mode
+  keeps the mock pipeline.
+- **Scope.** With « Questions techniques uniquement » (the default), spoken non-technical
+  questions get no `question.detected`, so no card and no answer. An early answer already
+  started for one is aborted unseen when the classifier decides.
 - **Cancel all** (clearing the history) aborts every generation and forgets the remembered
   questions, the transcript context and the summary.
 

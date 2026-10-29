@@ -200,13 +200,16 @@ describe("createSession (desktop wiring)", () => {
     expect(audioConfig(settings).questions).toEqual({
       model: "claude-haiku-5-5",
       includeMicrophone: false,
+      technicalOnly: true,
     });
 
     settings.questions.model = "claude-opus-5-5";
     settings.questions.includeMicrophone = true;
+    settings.questions.technicalOnly = false;
     expect(audioConfig(settings).questions).toEqual({
       model: "claude-opus-5-5",
       includeMicrophone: true,
+      technicalOnly: false,
     });
 
     settings.questions.enabled = false;

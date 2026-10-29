@@ -102,6 +102,7 @@ fn detection(questions: &QuestionDetectionConfig) -> Detection {
         };
     Detection {
         include_microphone: questions.include_microphone,
+        technical_only: questions.technical_only,
         classifier,
         unavailable,
     }

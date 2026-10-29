@@ -20,6 +20,8 @@ use crate::intent::{
 /// How a session detects questions.
 pub struct Detection {
     pub include_microphone: bool,
+    /// Cards and answers for technical questions only.
+    pub technical_only: bool,
     /// `None` runs the rules alone; `unavailable` then says why.
     pub classifier: Option<Arc<dyn Classifier>>,
     pub unavailable: Option<ClassifyError>,
@@ -54,6 +56,7 @@ pub fn session_emit(
             session_id,
             detector: DetectorConfig {
                 include_microphone: detection.include_microphone,
+                technical_only: detection.technical_only,
                 ..DetectorConfig::DEFAULT
             },
             assembler: AssemblerConfig::DEFAULT,
@@ -177,6 +180,7 @@ mod tests {
             "s1".into(),
             Some(Detection {
                 include_microphone: false,
+                technical_only: true,
                 classifier: Some(Arc::new(Classifier300)),
                 unavailable: None,
             }),

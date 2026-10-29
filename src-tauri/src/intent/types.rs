@@ -34,6 +34,14 @@ impl Intent {
         Self::NonQuestionStatement,
         Self::Ambiguous,
     ];
+
+    /// Technical content, as opposed to greetings, career and behavioral questions.
+    pub fn is_technical(self) -> bool {
+        matches!(
+            self,
+            Self::TechnicalQuestion | Self::CodingProblem | Self::SystemDesign
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -52,6 +60,14 @@ pub struct QuestionDetectionConfig {
     /// default: the microphone is the candidate, whose speech is context only.
     #[serde(default)]
     pub include_microphone: bool,
+    /// Only technical questions, and follow-ups on them, get a card and an answer. On unless
+    /// the overlay turns it off.
+    #[serde(default = "enabled")]
+    pub technical_only: bool,
+}
+
+fn enabled() -> bool {
+    true
 }
 
 /// Mirrors `detectedQuestionSchema` in `src/domain/events.ts`.
@@ -98,6 +114,8 @@ pub enum IgnoreReason {
     Ambiguous,
     /// The same question was asked again.
     Repeat,
+    /// A real question outside the technical-only scope (greeting, career, behavioral).
+    NotTechnical,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

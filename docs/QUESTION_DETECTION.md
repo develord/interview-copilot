@@ -30,6 +30,13 @@ Only the system-audio source (the interviewer) asks questions. Microphone speech
 candidate) is kept as context for the model. A setting, **Détecter aussi les questions dites
 au micro**, treats microphone speech as interviewer speech so the feature can be tested alone.
 
+**Questions techniques uniquement** (on by default) keeps cards and answers for
+`TECHNICAL_QUESTION`, `CODING_PROBLEM`, `SYSTEM_DESIGN`, and follow-ups on a question that
+has a card. Greetings, career and behavioral questions, and follow-ups on them, are reported as
+ignored (`not-technical`): no card, no answer. The detector still tracks them, so their
+repeats and follow-ups are recognised. A continuation of a left-out question is judged anew:
+it gets a card if the completed question is technical. Typed questions are always answered.
+
 ### 1. Assembling utterances (`assembler.rs`)
 
 With the 700 ms fast endpoint, a hesitation can close a turn mid-sentence ("Et du coup, sur
@@ -107,7 +114,7 @@ One Messages API call per escalated utterance, in Rust: the key never reaches th
   - A `continuation` revises its target. Rule 4 of the card lifecycle applies: the text
     updates while the card is pending, and is recorded as a correction afterwards.
   - Otherwise a card is created when `requiresResponse` is true and the intent is not
-    `AMBIGUOUS`.
+    `AMBIGUOUS`, and, with « Questions techniques uniquement », when the question is in scope.
   - An ambiguous fragment creates no card but stays in the context of the next call.
 - **Errors:** a timeout (10 s on Opus, 6 s on Haiku), 429, 5xx/529, a network failure,
   invalid JSON, a refusal or a truncation never crashes the session.

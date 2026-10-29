@@ -64,8 +64,15 @@ const settingsSchema = z.object({
       model: z.enum(CLAUDE_MODELS).catch("claude-haiku-5-5"),
       /** Also treat microphone speech as questions, for testing without an interviewer. */
       includeMicrophone: z.boolean().catch(false),
+      /** Cards and answers for technical questions only (and follow-ups on them). */
+      technicalOnly: z.boolean().catch(true),
     })
-    .catch({ enabled: true, model: "claude-haiku-5-5", includeMicrophone: false }),
+    .catch({
+      enabled: true,
+      model: "claude-haiku-5-5",
+      includeMicrophone: false,
+      technicalOnly: true,
+    }),
   answers: z
     .object({
       model: z.enum(ANSWER_MODELS).catch("claude-sonnet-5-5"),

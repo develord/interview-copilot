@@ -5,7 +5,8 @@ APIs; the user's end-of-development test is next.**
 
 - **Phase 6:** answers start while the classifier decides; long interviews get a rolling
   summary; transcription reconnects for as long as a network outage lasts; latency is shown
-  per card; Windows installer.
+  per card; Windows installer. Since then, only technical questions get a card and an answer
+  (setting on by default).
 - **Phase 5:** answers stream from Claude Sonnet 5.5 into the question's card. A verified
   profile is imported from a CV PDF and reviewed before use. `answer-bench` is not run yet.
 - **Phase 4:** measured. On the hold-out corpus: 94 % recall, no false positive, about 1.2 s per
@@ -322,6 +323,7 @@ spend no credit. The user tests everything live at the end of development.
 | Session wiring in one place (overlay first, then answers; detection; early start)                 | `pipeline.rs`, `audio/commands.rs`                                                | End-to-end test: two transcripts → a statement with no card, and a card with its streamed answer, two requests, nothing extra on screen                                                                  |
 | Transcription never gives up on a network outage (backoff, then every 5 s)                        | `stt/session.rs`                                                                  | Test: an outage longer than the backoff budget is still recovered; an auth error is still not retried                                                                                                    |
 | Latency per card: end of speech → first word, by stage                                            | `domain/latency.ts`, `stores/session.ts`, `AnswerCard.vue`, `TranscriptPanel.vue` | Store test with timed events (transcription 0.7 s, detection 1.2 s with Claude 1.1 s, answer 0.06 s); the card-isolation test still passes                                                               |
+| Technical questions only (on by default): other questions get no card and no answer               | `intent/detector.rs`, `QuestionSettings.vue`, `overlaySettings.ts`                | Detector test: greeting, behavioral question and its follow-up left out; a technical question and its follow-up kept. Transcript tag « Ignoré · question non technique »                                 |
 | Windows installer                                                                                 | `scripts/build.ps1` (`pnpm tauri build`, NSIS)                                    | Built: `src-tauri/target/release/bundle/nsis/Interview Copilot_0.1.0_x64-setup.exe` (2.5 MB). Not installed or run here                                                                                  |
 
 ### Acceptance criteria
@@ -330,7 +332,7 @@ spend no credit. The user tests everything live at the end of development.
 | -------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Audio to card end to end               | ✅ tests / ⏳ live | `pipeline.rs` test from transcripts to a filled card; the STT session has its own tests; live test by the user                      |
 | Survives provider and network failures | ✅ tests           | STT: reconnects indefinitely; classifier: falls back to the rules; answers: one retry before the first token, then a retryable card |
-| Critical UI and concurrency tests pass | ✅                 | 171 Rust tests, 124 front-end tests (card isolation, stale tokens, ordering)                                                        |
+| Critical UI and concurrency tests pass | ✅                 | 172 Rust tests, 124 front-end tests (card isolation, stale tokens, ordering)                                                        |
 | Latency instrumentation                | ✅                 | Per-card badge with a stage-by-stage tooltip, and the median in the transcript bar                                                  |
 
 ### Known limitations
@@ -389,7 +391,7 @@ cargo clippy --all-targets --features bench                 # 0 warnings
 pnpm check                                                  # lint + typecheck + 17 files, 123 tests passed
 
 # Phase 6
-cargo test                                                  # 171 passed, 4 ignored
+cargo test                                                  # 172 passed, 4 ignored (after technical-only)
 cargo clippy --all-targets --features bench                 # 0 warnings
 pnpm check                                                  # lint + typecheck + 18 files, 124 tests passed
 pnpm tauri build                                            # release build 5 min; Interview Copilot_0.1.0_x64-setup.exe, 2.5 MB

@@ -59,6 +59,7 @@ describe("TranscriptPanel", () => {
     store.dispatch(final("system-1-0", "Et du coup, sur la partie"));
     store.dispatch(final("system-1-1", "base de données, tu choisirais quoi ?"));
     store.dispatch(final("system-1-2", "On utilise Kafka chez nous."));
+    store.dispatch(final("system-1-3", "Parle-moi d'un conflit dans ton équipe."));
     store.dispatch({
       type: "utterance.classified",
       utterance: report(["system-1-0", "system-1-1"], {}),
@@ -72,13 +73,23 @@ describe("TranscriptPanel", () => {
         questionId: null,
       }),
     });
+    store.dispatch({
+      type: "utterance.classified",
+      utterance: report(["system-1-3"], {
+        decision: "ignored",
+        reason: "not-technical",
+        intent: "BEHAVIORAL_QUESTION",
+        questionId: null,
+      }),
+    });
     await flushPromises();
 
     const lines = wrapper.findAll(".line");
-    expect(lines.map((l) => l.find(".tag").exists())).toEqual([false, true, true]);
+    expect(lines.map((l) => l.find(".tag").exists())).toEqual([false, true, true, true]);
     const question = lines[1]!.find(".tag");
     expect(question.text()).toBe("Question · Technique");
     expect(question.attributes("title")).toBe("Claude, 640 ms");
     expect(lines[2]!.find(".tag").text()).toBe("Ignoré · affirmation");
+    expect(lines[3]!.find(".tag").text()).toBe("Ignoré · question non technique");
   });
 });

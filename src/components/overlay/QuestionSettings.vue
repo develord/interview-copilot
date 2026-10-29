@@ -109,6 +109,14 @@ onMounted(refreshKey);
     </p>
 
     <label class="row check">
+      <input v-model="settings.questions.technicalOnly" type="checkbox" />
+      <span>Questions techniques uniquement</span>
+    </label>
+    <p class="hint">
+      Salutations, parcours et questions comportementales sont ignorés : ni carte ni réponse.
+    </p>
+
+    <label class="row check">
       <input v-model="settings.questions.includeMicrophone" type="checkbox" />
       <span>Détecter aussi les questions dites au micro (pour tester seul)</span>
     </label>

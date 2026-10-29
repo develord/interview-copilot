@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import answerDeltaFixture from "../../contracts/fixtures/answer-delta.json";
+import answerFailedFixture from "../../contracts/fixtures/answer-failed.json";
 import classifierStatusFixture from "../../contracts/fixtures/classifier-status.json";
 import questionDetectedFixture from "../../contracts/fixtures/question-detected.json";
 import questionRevisedFixture from "../../contracts/fixtures/question-revised.json";
@@ -13,6 +15,8 @@ describe("question-detection contracts shared with Rust", () => {
     ["question.revised", questionRevisedFixture],
     ["utterance.classified", utteranceClassifiedFixture],
     ["classifier.status", classifierStatusFixture],
+    ["answer.delta", answerDeltaFixture],
+    ["answer.failed", answerFailedFixture],
   ])("accepts the %s fixture", (type, fixture) => {
     const parsed = parsePipelineEvent(fixture);
     expect(parsed.ok).toBe(true);

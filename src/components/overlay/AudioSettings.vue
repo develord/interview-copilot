@@ -6,6 +6,7 @@ import { asAudioError, type AudioDevices, type DeviceInfo, type SourceKind } fro
 import { audioBackend } from "@/platform/audioBackend";
 import { useOverlaySettings } from "@/stores/overlaySettings";
 import { useSessionStore } from "@/stores/session";
+import AnswerSettings from "./AnswerSettings.vue";
 import QuestionSettings from "./QuestionSettings.vue";
 import TranscriptionSettings from "./TranscriptionSettings.vue";
 
@@ -86,8 +87,8 @@ onMounted(refresh);
       La capture audio n'est disponible que dans l'application desktop.
     </p>
     <p v-else-if="settings.sessionMode === 'live'" class="hint">
-      La capture démarre uniquement avec « Démarrer ». Rien n'est enregistré sur le disque. Les
-      réponses restent simulées jusqu'à l'arrivée du moteur de réponse (phase 5).
+      La capture démarre uniquement avec « Démarrer ». Rien n'est enregistré sur le disque, à part
+      ton profil validé.
     </p>
   </div>
 
@@ -131,6 +132,7 @@ onMounted(refresh);
 
   <TranscriptionSettings v-if="settings.sessionMode === 'live' && audioBackend.available" />
   <QuestionSettings v-if="settings.sessionMode === 'live' && audioBackend.available" />
+  <AnswerSettings v-if="settings.sessionMode === 'live' && audioBackend.available" />
 </template>
 
 <style scoped>

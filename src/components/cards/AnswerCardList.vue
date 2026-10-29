@@ -38,6 +38,7 @@ const { unseen, jumpToEdge } = useStickyScroll(
           v-for="card in ordered"
           :key="card.id"
           :card="card"
+          :latency="store.latencyOf(card.questionId)"
           :context-question="
             card.contextRef ? (questionTextById.get(card.contextRef) ?? null) : null
           "

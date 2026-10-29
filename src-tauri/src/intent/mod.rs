@@ -8,7 +8,6 @@ pub mod assembler;
 pub mod classifier;
 pub mod claude;
 pub mod commands;
-pub mod credentials;
 pub mod detector;
 pub mod engine;
 pub mod eval;

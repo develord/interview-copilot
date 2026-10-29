@@ -1,0 +1,7 @@
+{
+  "type": "answer.failed",
+  "questionId": "session-1761649200000-q2",
+  "requestId": "session-1761649200000-q2-a1",
+  "message": "Connexion à Claude perdue.",
+  "retryable": true
+}

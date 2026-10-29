@@ -28,7 +28,19 @@ pub struct EngineOptions {
     pub session_id: String,
     pub detector: DetectorConfig,
     pub assembler: AssemblerConfig,
+    /// Told when an utterance goes to the model, before its decision.
+    pub on_escalate: Option<OnEscalate>,
 }
+
+/// An interviewer utterance sent to the model, whose decision is not known yet. The answer
+/// engine starts its answer early and keeps it only if it becomes a question.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Escalated {
+    pub segment_ids: Vec<String>,
+    pub text: String,
+}
+
+pub type OnEscalate = Arc<dyn Fn(&Escalated) + Send + Sync>;
 
 enum Input {
     Partial(SourceKind),
@@ -92,6 +104,7 @@ pub fn spawn(
         detector,
         classifier,
         unavailable,
+        options.on_escalate,
         utterance_rx,
         emit,
         epoch,
@@ -145,6 +158,7 @@ async fn classify(
     mut detector: Detector,
     classifier: Option<Arc<dyn Classifier>>,
     unavailable: Option<ClassifyError>,
+    on_escalate: Option<OnEscalate>,
     mut utterances: mpsc::UnboundedReceiver<Utterance>,
     emit: Emit,
     epoch: Instant,
@@ -182,6 +196,9 @@ async fn classify(
             events.into_iter().for_each(|e| emit(e));
             continue;
         };
+        if let Some(notify) = &on_escalate {
+            notify(&pending.escalated());
+        }
         let started = Instant::now();
         let result = model.classify(&pending.request).await;
         let latency = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
@@ -293,6 +310,7 @@ mod tests {
             session_id: "session-1".into(),
             detector: DetectorConfig::DEFAULT,
             assembler: AssemblerConfig::DEFAULT,
+            on_escalate: None,
         }
     }
 
@@ -392,6 +410,39 @@ mod tests {
         assert_eq!(last.state, ClassifierState::Ready);
         assert_eq!(last.classified, 2);
         assert_eq!(last.last_latency_ms, Some(400));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn utterances_sent_to_the_model_are_announced_before_the_decision() {
+        let model = Arc::new(ScriptedModel {
+            delay: Duration::from_millis(400),
+            answers: Mutex::new(vec![question(
+                Intent::TechnicalQuestion,
+                "Comment indexerais-tu la table ?",
+            )]),
+            seen: Mutex::new(Vec::new()),
+        });
+        let (emit, events) = recorder();
+        let escalated = Arc::new(Mutex::new(Vec::new()));
+        let log = escalated.clone();
+        let mut opts = options();
+        opts.on_escalate = Some(Arc::new(move |u: &Escalated| {
+            log.lock().unwrap().push(u.clone())
+        }));
+        let engine = spawn(&Handle::current(), Some(model), None, opts, emit);
+        engine.observe(&final_("system-1-0", "Bonjour !"));
+        engine.observe(&final_("system-1-1", "Et comment tu indexerais la table ?"));
+        drop(engine);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        // The greeting is decided by the rules; only the question went to the model.
+        assert_eq!(
+            *escalated.lock().unwrap(),
+            [Escalated {
+                segment_ids: vec!["system-1-1".into()],
+                text: "Et comment tu indexerais la table ?".into(),
+            }]
+        );
+        assert_eq!(questions(&events.lock().unwrap()).len(), 2);
     }
 
     #[tokio::test(start_paused = true)]

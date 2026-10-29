@@ -21,6 +21,16 @@ pub enum SessionStatus {
     Error,
 }
 
+/// The two independent parts of an answer card (`ANSWER_SECTIONS` in `src/domain/types.ts`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AnswerSection {
+    /// Readable in a few seconds.
+    Primary,
+    /// Code, complexity, trade-offs — the expandable part.
+    Details,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum PipelineEvent {
@@ -49,6 +59,32 @@ pub enum PipelineEvent {
     UtteranceClassified { utterance: UtteranceReport },
     #[serde(rename = "classifier.status")]
     ClassifierStatus(ClassifierStatus),
+    #[serde(rename = "answer.started", rename_all = "camelCase")]
+    AnswerStarted {
+        question_id: String,
+        request_id: String,
+    },
+    /// `seq` starts at 0 for every request; the overlay drops duplicates and reorders.
+    #[serde(rename = "answer.delta", rename_all = "camelCase")]
+    AnswerDelta {
+        question_id: String,
+        request_id: String,
+        seq: u64,
+        section: AnswerSection,
+        delta: String,
+    },
+    #[serde(rename = "answer.completed", rename_all = "camelCase")]
+    AnswerCompleted {
+        question_id: String,
+        request_id: String,
+    },
+    #[serde(rename = "answer.failed", rename_all = "camelCase")]
+    AnswerFailed {
+        question_id: String,
+        request_id: String,
+        message: String,
+        retryable: bool,
+    },
 }
 
 #[cfg(test)]
@@ -208,6 +244,34 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&status).unwrap(),
             fixture("classifier-status.json")
+        );
+    }
+
+    #[test]
+    fn answer_events_match_the_shared_contract_fixtures() {
+        let delta = PipelineEvent::AnswerDelta {
+            question_id: "session-1761649200000-q2".into(),
+            request_id: "session-1761649200000-q2-a1".into(),
+            seq: 3,
+            section: AnswerSection::Details,
+            delta: "```ts
+const store = useStore()
+```"
+            .into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&delta).unwrap(),
+            fixture("answer-delta.json")
+        );
+        let failed = PipelineEvent::AnswerFailed {
+            question_id: "session-1761649200000-q2".into(),
+            request_id: "session-1761649200000-q2-a1".into(),
+            message: "Connexion à Claude perdue.".into(),
+            retryable: true,
+        };
+        assert_eq!(
+            serde_json::to_value(&failed).unwrap(),
+            fixture("answer-failed.json")
         );
     }
 

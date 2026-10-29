@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { reactive, toRefs, watch } from "vue";
 import { z } from "zod";
+import { ANSWER_MODELS } from "@/domain/answer";
 import { CLAUDE_MODELS } from "@/domain/intent";
 import { inTauri } from "@/platform/overlayWindow";
 
@@ -65,6 +66,13 @@ const settingsSchema = z.object({
       includeMicrophone: z.boolean().catch(false),
     })
     .catch({ enabled: true, model: "claude-haiku-5-5", includeMicrophone: false }),
+  answers: z
+    .object({
+      model: z.enum(ANSWER_MODELS).catch("claude-sonnet-5-5"),
+      /** Start writing while Claude decides whether the sentence is a question (~1 s sooner). */
+      earlyStart: z.boolean().catch(true),
+    })
+    .catch({ model: "claude-sonnet-5-5", earlyStart: true }),
 });
 export type OverlaySettings = z.infer<typeof settingsSchema>;
 export type CardOrder = OverlaySettings["order"];

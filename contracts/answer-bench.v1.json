@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "description": "Answer-engine benchmark: a fictional verified profile and questions across intents and languages. missingFact marks questions whose personal facts are NOT in the profile: the answer must use a [placeholder] instead of inventing them.",
+  "profile": {
+    "name": "Alex Martin",
+    "headline": "Développeur front-end senior",
+    "summary": "Sept ans de développement web, dont trois sur des applications Vue 3 à fort trafic.",
+    "skills": "Langages : TypeScript, JavaScript\nFront-end : Vue.js 3, Pinia, Nuxt\nOutils : Vite, Vitest, Cypress, Docker",
+    "experience": "Développeur front-end — Logista (logiciel de logistique) — 2021-2024\n- Migration d'une application Vue 2 vers Vue 3 (Composition API, Pinia)\n- Temps de build réduit de 40 % en passant de webpack à Vite\n\nDéveloppeur web — Agence Pixel — 2018-2021\n- Sites e-commerce en Nuxt 2\n- Mise en place des tests end-to-end avec Cypress",
+    "projects": "Planifio — application open source de planification d'équipes\n- Vue 3, Supabase",
+    "education": "Master informatique — Université de Lyon — 2018",
+    "languages": "Français (natif), anglais (courant)",
+    "targetRole": "Lead développeur front-end dans une startup SaaS",
+    "verifiedAt": 1
+  },
+  "cases": [
+    { "id": "greeting-fr", "question": "Bonjour Alex, merci d'être là.", "intent": "GREETING_OR_SMALL_TALK", "language": "fr" },
+    { "id": "intro-fr", "question": "Peux-tu te présenter rapidement ?", "intent": "EXPERIENCE_QUESTION", "language": "fr" },
+    { "id": "management-fr", "question": "Combien de personnes as-tu déjà managées ?", "intent": "EXPERIENCE_QUESTION", "language": "fr", "missingFact": true },
+    { "id": "salary-fr", "question": "Quelles sont tes prétentions salariales ?", "intent": "EXPERIENCE_QUESTION", "language": "fr", "missingFact": true },
+    { "id": "ref-reactive-fr", "question": "Quelle est la différence entre ref et reactive dans Vue 3 ?", "intent": "TECHNICAL_QUESTION", "language": "fr" },
+    {
+      "id": "follow-up-fr",
+      "question": "Et dans quel cas tu préfères reactive ?",
+      "intent": "CLARIFICATION_OR_FOLLOW_UP",
+      "language": "fr",
+      "earlier": {
+        "question": "Quelle est la différence entre ref et reactive dans Vue 3 ?",
+        "answer": "ref enveloppe n'importe quelle valeur, y compris un primitif, et s'utilise avec .value ; reactive rend un objet profondément réactif, sans .value, mais on perd la réactivité si on le déstructure."
+      }
+    },
+    { "id": "process-thread-en", "question": "What's the difference between a process and a thread?", "intent": "TECHNICAL_QUESTION", "language": "en" },
+    { "id": "event-loop-mixed", "question": "Ok, so tu peux m'expliquer how the event loop works en JavaScript ?", "intent": "TECHNICAL_QUESTION", "language": "mixed" },
+    { "id": "palindrome-fr", "question": "Écris une fonction qui vérifie si une chaîne est un palindrome, en ignorant la casse et les espaces.", "intent": "CODING_PROBLEM", "language": "fr" },
+    { "id": "rate-limiter-en", "question": "How would you design a rate limiter for a public API?", "intent": "SYSTEM_DESIGN", "language": "en" },
+    { "id": "disagreement-fr", "question": "Raconte-moi une situation où tu as été en désaccord avec ton manager.", "intent": "BEHAVIORAL_QUESTION", "language": "fr", "missingFact": true },
+    { "id": "leaving-en", "question": "Why do you want to leave your current job?", "intent": "EXPERIENCE_QUESTION", "language": "en", "missingFact": true }
+  ]
+}

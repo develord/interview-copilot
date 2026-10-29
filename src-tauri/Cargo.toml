@@ -49,6 +49,10 @@ required-features = ["bench"]
 name = "intent-bench"
 required-features = ["bench"]
 
+[[bin]]
+name = "answer-bench"
+required-features = ["bench"]
+
 [profile.release]
 codegen-units = 1
 lto = true

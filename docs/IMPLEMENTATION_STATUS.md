@@ -1,10 +1,18 @@
 # Implementation status
 
-Last updated: 2026-10-28 · Current phase: **Phase 4 implemented and measured.** Haiku 5.5 is
-the default, with prompt v3. On the hold-out corpus: 94 % recall, no false positive, intents
-and follow-ups right. Latency: 1.1–1.3 s per classification, against a 500 ms target that a
-remote model cannot reach (floor ~750 ms on the server side). Phase 3 passed a live test in the
-app. Next: a live Phase 4 test, then Phase 5 (answer engine, in the same streamed call).
+Last updated: 2026-10-29 · Current phase: **Phase 6 implemented and tested without paid
+APIs; the user's end-of-development test is next.**
+
+- **Phase 6:** answers start while the classifier decides; long interviews get a rolling
+  summary; transcription reconnects for as long as a network outage lasts; latency is shown
+  per card; Windows installer.
+- **Phase 5:** answers stream from Claude Sonnet 5.5 into the question's card. A verified
+  profile is imported from a CV PDF and reviewed before use. `answer-bench` is not run yet.
+- **Phase 4:** measured. On the hold-out corpus: 94 % recall, no false positive, about 1.2 s per
+  classification.
+
+Out of scope by decision (2026-10-29): profile encryption, a privacy document, and Phase 7
+(macOS).
 
 ## Environment
 
@@ -266,6 +274,73 @@ Design, privacy and results: [QUESTION_DETECTION.md](QUESTION_DETECTION.md).
    dropped as a repeated greeting. Found by the oracle run on the corpus
    (`a_greeting_gets_a_card_at_once_and_only_once`).
 
+## Phase 5 — LLM response engine: implemented, not measured yet
+
+Design, privacy and evaluation: [ANSWER_ENGINE.md](ANSWER_ENGINE.md).
+
+### Deliverables
+
+| Deliverable                                                                                                  | Where                                                        | Verified how                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared Claude client: models, errors, SSE streaming, one retry before the first token, key                   | `llm/`                                                       | 9 tests: model settings (Sonnet `between_tools`, Haiku thinking off, fallbacks), HTTP error mapping, SSE byte-by-byte reassembly, refusals and truncation, headers, a retry before any text, no retry after text or on 401                               |
+| Streaming answer engine: one task per question, request ids, abort on retry/restart/clear, follow-up context | `answer/engine.rs`                                           | 5 tests against a local fake API: both sections streamed with contiguous `seq`, a missing key fails retryably, a follow-up sees the earlier answer and the profile, manual question → detected → failed → retried → completed, clearing stops everything |
+| Section splitter (`<<<DETAILS>>>` never shown, even when cut)                                                | `answer/sections.rs`                                         | 3 tests: every cut position, one character at a time, look-alike text                                                                                                                                                                                    |
+| Answer prompt v1 (templates per intent, no invented facts, placeholders, language)                           | `prompts/answer.v1.md`, `answer/prompt.rs`                   | Request-shape and rendering tests; **quality measured by `answer-bench` (not run yet)**                                                                                                                                                                  |
+| Verified profile: storage, validation, rendering                                                             | `profile/mod.rs`                                             | 3 tests: trimming and limits, rendering, disk round trip, unverified files ignored                                                                                                                                                                       |
+| CV import: PDF → Claude Opus 5.5 → unverified draft                                                          | `profile/extract.rs`, `prompts/profile-extraction.v1.md`     | 3 tests: PDF validation (type, size, base64), request shape (document block, structured output), strict draft parsing. **Not yet run on a real CV**                                                                                                      |
+| Answer and profile UI (model choice, drop zone, review form, delete with confirmation)                       | `AnswerSettings.vue`, `answerBackend.ts`                     | 3 component tests: dropped PDF → draft → edited → saved; non-PDF refused without a call; delete asks for confirmation                                                                                                                                    |
+| Live answers come from Rust (no more simulated answers in live mode)                                         | `createSession.ts`, `liveAudioSession.ts`                    | Wiring tests: manual/retry/cancel go to Rust, the model is configured at start and on change, Rust answer events fill the card                                                                                                                           |
+| Rust ↔ TS answer contract                                                                                    | `contracts/fixtures/answer-delta.json`, `answer-failed.json` | Asserted from both suites                                                                                                                                                                                                                                |
+| Answer benchmark with an invented-facts judge                                                                | `contracts/answer-bench.v1.json`, `bin/answer-bench.rs`      | Builds; not run (costs about $0.25 per run)                                                                                                                                                                                                              |
+
+### Acceptance criteria
+
+| Criterion                            | Status             | Evidence                                                                                                                         |
+| ------------------------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Progressive answers                  | ✅ tests / ⏳ live | Deltas stream into the card as they arrive (engine and wiring tests)                                                             |
+| Late events hit the right card       | ✅                 | Request ids per generation; aborted requests' tokens are stale for the lifecycle (Phase 1 property tests); engine test for retry |
+| No invented personal facts           | ⏳                 | Prompt rule + verified profile only + placeholders; to be measured by the bench's judge                                          |
+| Failures keep transcript and history | ✅                 | `answer.failed` keeps the partial answer and the card; retry; the transcript is untouched                                        |
+
+### Known limitations
+
+See [ANSWER_ENGINE.md](ANSWER_ENGINE.md#known-limitations). The two calls in a row and the
+missing summary were addressed in Phase 6. The profile is not encrypted at rest (out of scope).
+
+## Phase 6 — integration & robustness: implemented, tested without paid APIs
+
+Tests use fake APIs only (local fake Claude server, scripted classifier and STT provider), to
+spend no credit. The user tests everything live at the end of development.
+
+### Deliverables
+
+| Deliverable                                                                                       | Where                                                                             | Verified how                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Early start: the answer starts when the utterance goes to the classifier, held until the decision | `answer/engine.rs` (`speculate`, `Route`), `intent/engine.rs` (`on_escalate`)     | 4 tests: held output never shown, replayed into the card with one request (finished, and still streaming with contiguous `seq`), dropped for a statement; the engine announces escalated utterances only |
+| « Réponse anticipée » switch (on by default)                                                      | `AnswerSettings.vue`, `overlaySettings.ts`, `answer_configure`                    | Wiring test: model and switch sent at start and on change                                                                                                                                                |
+| Rolling summary of the lines that leave the context (Haiku 5.5)                                   | `answer/summary.rs`, `prompts/summary.v1.md`                                      | 2 tests: request shape; 24 lines → one summary call, then the summary is in the next answer                                                                                                              |
+| Session wiring in one place (overlay first, then answers; detection; early start)                 | `pipeline.rs`, `audio/commands.rs`                                                | End-to-end test: two transcripts → a statement with no card, and a card with its streamed answer, two requests, nothing extra on screen                                                                  |
+| Transcription never gives up on a network outage (backoff, then every 5 s)                        | `stt/session.rs`                                                                  | Test: an outage longer than the backoff budget is still recovered; an auth error is still not retried                                                                                                    |
+| Latency per card: end of speech → first word, by stage                                            | `domain/latency.ts`, `stores/session.ts`, `AnswerCard.vue`, `TranscriptPanel.vue` | Store test with timed events (transcription 0.7 s, detection 1.2 s with Claude 1.1 s, answer 0.06 s); the card-isolation test still passes                                                               |
+| Windows installer                                                                                 | `scripts/build.ps1` (`pnpm tauri build`, NSIS)                                    | Built: `src-tauri/target/release/bundle/nsis/Interview Copilot_0.1.0_x64-setup.exe` (2.5 MB). Not installed or run here                                                                                  |
+
+### Acceptance criteria
+
+| Criterion                              | Status             | Evidence                                                                                                                            |
+| -------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Audio to card end to end               | ✅ tests / ⏳ live | `pipeline.rs` test from transcripts to a filled card; the STT session has its own tests; live test by the user                      |
+| Survives provider and network failures | ✅ tests           | STT: reconnects indefinitely; classifier: falls back to the rules; answers: one retry before the first token, then a retryable card |
+| Critical UI and concurrency tests pass | ✅                 | 171 Rust tests, 124 front-end tests (card isolation, stale tokens, ordering)                                                        |
+| Latency instrumentation                | ✅                 | Per-card badge with a stage-by-stage tooltip, and the median in the transcript bar                                                  |
+
+### Known limitations
+
+- The latency is measured in the webview, from event arrival times (the IPC adds a few ms). The
+  end of speech comes from the STT session's own measure, which is missing when the provider
+  sends no status right after the final.
+- No Playwright end-to-end test of the native window; the layout checks stay manual.
+- The installer is not code-signed: Windows SmartScreen warns on first run.
+
 ## Commands executed (key ones)
 
 ```text
@@ -307,6 +382,17 @@ intent-bench --model haiku                                  # prompt v2: recall 
 intent-bench --probe 10                                     # first token: bare ~750 ms, full ~1 000-1 300 ms
 intent-bench (v3, ×2) / intent-bench --holdout (×2)         # main: 0 errors; hold-out: recall 94 %, 0 false positive
 curl (no key) to api.anthropic.com                          # connect 15-50 ms, rejected request 180-340 ms
+
+# Phase 5
+cargo test                                                  # 162 passed, 4 ignored
+cargo clippy --all-targets --features bench                 # 0 warnings
+pnpm check                                                  # lint + typecheck + 17 files, 123 tests passed
+
+# Phase 6
+cargo test                                                  # 171 passed, 4 ignored
+cargo clippy --all-targets --features bench                 # 0 warnings
+pnpm check                                                  # lint + typecheck + 18 files, 124 tests passed
+pnpm tauri build                                            # release build 5 min; Interview Copilot_0.1.0_x64-setup.exe, 2.5 MB
 ```
 
 ## How to run
@@ -317,15 +403,16 @@ pnpm tauri dev      # native overlay; Démarrer (or Ctrl+Shift+P) starts live ca
 pnpm dev            # browser only, http://localhost:1420 (demo mode; Tauri calls are no-ops)
 pnpm check          # lint + typecheck + tests
 pnpm test:rust      # Rust unit tests (hardware tests are opt-in, see AUDIO_PIPELINE.md)
+.\scripts\build.ps1  # Windows installer: src-tauri\target\release\bundle\nsis\*-setup.exe
 ```
 
 ## Next concrete step
 
-1. **You:** a live Phase 4 test with Haiku. In Réglages › Audio › Détecter les questions, select
-   Haiku 5.5 if Opus is still shown (a saved setting keeps its earlier value).
-2. Phase 5: generation in the same streamed call as the classification. It saves a round trip
-   of about 1 s toward the 2 s first-answer target.
-3. **You:** before real interviews, move AssemblyAI to a paid plan and opt out of model
-   training. Check the Anthropic organization's retention settings.
-4. Still open from Phase 3: record the real corpus (it also feeds the intent corpus), compare
-   Soniox, and do the manual microphone and device checks.
+1. **You:** the end-of-development test, live:
+   - install with the setup .exe (or `.\scripts\dev.ps1`);
+   - import your CV in Réglages › Audio › Profil vérifié, review it and save it;
+   - ask questions, typed or spoken (microphone switch on), and read the latency on each card.
+2. **You (approval):** `answer-bench` with Sonnet 5.5 (about $0.25), to measure the answers'
+   quality and the invented-facts rate.
+3. **You:** before real interviews, move AssemblyAI to a paid plan, opt out of training, and
+   check the Anthropic organization's retention settings.

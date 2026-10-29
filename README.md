@@ -5,9 +5,10 @@ authorized audio source, detects questions (French, English and mixed French-Eng
 speech), and streams concise answers into a stable floating overlay. Every question gets its own
 card, and answers never overwrite each other.
 
-**Status:** Phase 4. Native audio capture, streaming transcription (AssemblyAI or Soniox, EU
-endpoints) and question detection (rules + Claude), with a live transcript panel. Answers are
-still simulated (Phase 5). See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+**Status:** Phase 6. Native audio capture, streaming transcription (AssemblyAI or Soniox,
+EU endpoints), question detection (rules + Claude Haiku) and streamed answers (Claude Sonnet)
+based on a verified profile imported from your CV. Answers start while the question is being
+classified, and each card shows its latency. See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Requirements (Windows)
 
@@ -24,7 +25,7 @@ still simulated (Phase 5). See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATI
 | `pnpm dev`         | Run the UI in a browser at http://localhost:1420 (native calls are no-ops) |
 | `pnpm check`       | Lint + type-check + unit/component tests                                   |
 | `pnpm test:rust`   | Rust unit tests                                                            |
-| `pnpm tauri build` | Build the Windows installer (NSIS)                                         |
+| `pnpm tauri build` | Build the Windows installer (NSIS); `scripts/build.ps1` sets up PATH first |
 
 Press **Démarrer** (or `Ctrl+Shift+P`) to start the session. In the desktop app this captures
 **system audio** by default (the microphone is off until you enable it in Réglages; nothing is

@@ -8,7 +8,7 @@ export interface LiveAudioSessionOptions {
   getConfig: () => AudioConfig;
   /** Command failures (e.g. nothing enabled) — capture state itself arrives as events. */
   onCommandError: (error: AudioError) => void;
-  /** Answers are still simulated until the answer engine lands (Phase 5). */
+  /** The Rust answer engine (manual questions, retries, cancellation). */
   answers: Pick<SessionController, "askManual" | "retry" | "cancelAll">;
 }
 

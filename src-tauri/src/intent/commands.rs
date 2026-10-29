@@ -3,8 +3,8 @@
 
 use serde::Serialize;
 
-use super::credentials;
 use super::types::ClassifyError;
+use crate::llm::credentials;
 
 #[derive(Debug, Serialize)]
 pub struct LlmKeyStatus {

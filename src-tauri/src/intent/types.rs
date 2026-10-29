@@ -4,6 +4,10 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Claude models (Haiku 5.5 is the classification default, see docs/QUESTION_DETECTION.md)
+/// and the shared error contract, under the names this module's contract has always used.
+pub use crate::llm::{ClaudeModel, LlmError as ClassifyError, LlmErrorCode as ClassifyErrorCode};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Intent {
@@ -38,26 +42,6 @@ pub enum Language {
     Fr,
     En,
     Mixed,
-}
-
-/// Claude models offered for classification. Haiku is the default: on the labeled corpus it
-/// passes every quality metric at a fraction of Opus's latency and cost
-/// (see docs/QUESTION_DETECTION.md).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ClaudeModel {
-    #[serde(rename = "claude-opus-5-5")]
-    Opus55,
-    #[serde(rename = "claude-haiku-5-5")]
-    Haiku55,
-}
-
-impl ClaudeModel {
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::Opus55 => "claude-opus-5-5",
-            Self::Haiku55 => "claude-haiku-5-5",
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,66 +138,6 @@ pub enum ClassifierState {
     Degraded,
     /// The model refused the key or the account; rules only until the next session.
     Error,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ClassifyErrorCode {
-    MissingKey,
-    Unauthorized,
-    /// Billing problem or exhausted credit.
-    Quota,
-    RateLimited,
-    /// 5xx / 529 — retried once.
-    Overloaded,
-    Network,
-    Timeout,
-    /// The response did not match the expected JSON.
-    InvalidResponse,
-    /// The model declined to answer (`stop_reason: "refusal"`).
-    Refused,
-    /// Malformed request — a bug or an API change.
-    Protocol,
-    /// The OS credential store failed (saving or reading the key).
-    CredentialStore,
-}
-
-impl ClassifyErrorCode {
-    pub fn is_retryable(self) -> bool {
-        matches!(
-            self,
-            Self::RateLimited | Self::Overloaded | Self::Network | Self::Timeout
-        )
-    }
-
-    /// Errors that will not go away by themselves during this session.
-    pub fn is_fatal(self) -> bool {
-        matches!(
-            self,
-            Self::MissingKey | Self::Unauthorized | Self::Quota | Self::CredentialStore
-        )
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct ClassifyError {
-    pub code: ClassifyErrorCode,
-    pub detail: String,
-}
-
-impl ClassifyError {
-    pub fn new(code: ClassifyErrorCode, detail: impl Into<String>) -> Self {
-        Self {
-            code,
-            detail: detail.into(),
-        }
-    }
-}
-
-impl std::fmt::Display for ClassifyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}: {}", self.code, self.detail)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

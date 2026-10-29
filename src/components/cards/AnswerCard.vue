@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { AnswerCard } from "@/domain/cardLifecycle";
+import { describeLatency, formatSeconds, type LatencyBreakdown } from "@/domain/latency";
 import Icon from "@/components/icons/Icon";
 import RichText from "./RichText.vue";
 import { ANSWER_STATUS_LABEL, INTENT_META, LANGUAGE_LABEL, formatClock } from "./labels";
@@ -10,10 +11,12 @@ const props = withDefaults(
     card: AnswerCard;
     /** Text of the question this card follows up on, if any. */
     contextQuestion?: string | null;
+    /** How long the first word took, once known. */
+    latency?: LatencyBreakdown | null;
     /** `compact` hides the question (shown in the active panel); `focus` is the enlarged view. */
     variant?: "default" | "compact" | "focus";
   }>(),
-  { contextQuestion: null, variant: "default" },
+  { contextQuestion: null, latency: null, variant: "default" },
 );
 defineEmits<{ retry: []; enlarge: [] }>();
 
@@ -39,6 +42,9 @@ const latestRevision = computed(() => props.card.questionRevisions.at(-1) ?? nul
         {{ ANSWER_STATUS_LABEL[card.status] }}
       </span>
       <span class="spacer" />
+      <span v-if="latency" class="meta latency" :title="describeLatency(latency)">
+        {{ formatSeconds(latency.totalMs) }}
+      </span>
       <time class="meta" :datetime="new Date(card.createdAt).toISOString()">
         {{ formatClock(card.createdAt) }}
       </time>
@@ -134,10 +140,21 @@ const latestRevision = computed(() => props.card.questionRevisions.at(-1) ?? nul
 }
 .meta {
   display: inline-flex;
+  flex: none;
   align-items: center;
   color: var(--text-3);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* On a narrow overlay the clock gives way first; labels never wrap. */
+time.meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.latency {
+  cursor: help;
 }
 .status-streaming,
 .status-pending {

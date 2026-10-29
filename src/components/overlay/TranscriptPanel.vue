@@ -9,6 +9,7 @@ import {
   STT_STATE_LABEL,
 } from "@/components/cards/labels";
 import type { UtteranceReport } from "@/domain/intent";
+import { formatSeconds } from "@/domain/latency";
 import { useStickyScroll } from "@/composables/useStickyScroll";
 import { useOverlaySettings } from "@/stores/overlaySettings";
 import { useSessionStore } from "@/stores/session";
@@ -44,7 +45,9 @@ const summary = computed(() => {
           : ""
       }`
     : "";
-  return `${PROVIDER_LABEL[first.provider]} · ${state}${latency !== undefined ? ` · ≈${latency} ms` : ""}${detection}`;
+  const answered =
+    store.medianLatencyMs !== null ? ` · 1er mot ≈${formatSeconds(store.medianLatencyMs)}` : "";
+  return `${PROVIDER_LABEL[first.provider]} · ${state}${latency !== undefined ? ` · ≈${latency} ms` : ""}${detection}${answered}`;
 });
 
 /** Short tag for the decision taken on the utterance that ends with this line. */

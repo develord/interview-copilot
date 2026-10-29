@@ -9,16 +9,14 @@ use tauri::{AppHandle, Emitter, State};
 use super::engine::{AudioEngine, Emit};
 use super::types::{AudioConfig, AudioDevices, AudioError, AudioErrorCode, SourceKind};
 use super::worker::{DiscardSink, FrameSink, RecoveryPolicy};
+use crate::answer::engine::AnswerEngine;
 use crate::events::PIPELINE_EVENT;
 use crate::intent::{
-    self,
-    assembler::AssemblerConfig,
     classifier::Classifier,
     claude::ClaudeClassifier,
-    detector::DetectorConfig,
-    engine::EngineOptions,
     types::{ClassifyError, ClassifyErrorCode, QuestionDetectionConfig},
 };
+use crate::pipeline::{self, Detection};
 use crate::stt::{self, credentials, session};
 
 #[tauri::command]
@@ -32,6 +30,7 @@ pub async fn audio_list_devices(
 pub async fn audio_start(
     app: AppHandle,
     engine: State<'_, AudioEngine>,
+    answers: State<'_, Arc<AnswerEngine>>,
     config: AudioConfig,
 ) -> Result<(), AudioError> {
     let emit: Emit = Arc::new(move |event| {
@@ -60,12 +59,13 @@ pub async fn audio_start(
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_millis())
     );
-    let sink_emit = match &config.questions {
-        Some(questions) => {
-            with_question_engine(&runtime, questions, session_id.clone(), emit.clone())
-        }
-        None => emit.clone(),
-    };
+    let sink_emit = pipeline::session_emit(
+        &runtime,
+        session_id.clone(),
+        config.questions.as_ref().map(detection),
+        emit.clone(),
+        answers.inner().clone(),
+    );
     let sinks = move |source: SourceKind| -> Box<dyn FrameSink> {
         Box::new(session::spawn(
             &runtime,
@@ -82,18 +82,11 @@ pub async fn audio_start(
     engine.start(config, emit, &sinks)
 }
 
-/// Starts question detection for the session and returns the `Emit` the STT sessions should
-/// use: it forwards every event to the webview and taps the transcripts for the engine. A
-/// missing or unreadable Claude key does not block the session: detection runs on the rules
-/// alone and `classifier.status` says why.
-fn with_question_engine(
-    runtime: &tokio::runtime::Handle,
-    questions: &QuestionDetectionConfig,
-    session_id: String,
-    emit: Emit,
-) -> Emit {
+/// Question detection for the session. A missing or unreadable Claude key does not block the
+/// session: detection runs on the rules alone and `classifier.status` says why.
+fn detection(questions: &QuestionDetectionConfig) -> Detection {
     let (classifier, unavailable): (Option<Arc<dyn Classifier>>, _) =
-        match intent::credentials::get() {
+        match crate::llm::credentials::get() {
             Ok(Some(key)) => match ClaudeClassifier::new(key, questions.model, None) {
                 Ok(claude) => (Some(Arc::new(claude)), None),
                 Err(error) => (None, Some(error)),
@@ -107,24 +100,11 @@ fn with_question_engine(
             ),
             Err(error) => (None, Some(error)),
         };
-    let engine = intent::engine::spawn(
-        runtime,
+    Detection {
+        include_microphone: questions.include_microphone,
         classifier,
         unavailable,
-        EngineOptions {
-            session_id,
-            detector: DetectorConfig {
-                include_microphone: questions.include_microphone,
-                ..DetectorConfig::DEFAULT
-            },
-            assembler: AssemblerConfig::DEFAULT,
-        },
-        emit.clone(),
-    );
-    Arc::new(move |event| {
-        engine.observe(&event);
-        emit(event);
-    })
+    }
 }
 
 #[tauri::command]

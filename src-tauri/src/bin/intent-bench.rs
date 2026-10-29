@@ -18,7 +18,8 @@ use interview_copilot_lib::intent::classifier::{
 };
 use interview_copilot_lib::intent::claude::ClaudeClassifier;
 use interview_copilot_lib::intent::eval::{self, Tally};
-use interview_copilot_lib::intent::{credentials, types::ClaudeModel};
+use interview_copilot_lib::intent::types::ClaudeModel;
+use interview_copilot_lib::llm::credentials;
 use serde::Serialize;
 
 struct Args {
@@ -46,7 +47,8 @@ fn parse_args() -> Result<Args, String> {
                 parsed.model = Some(match args.next().as_deref() {
                     Some("opus") => ClaudeModel::Opus55,
                     Some("haiku") => ClaudeModel::Haiku55,
-                    other => return Err(format!("--model opus|haiku, got {other:?}")),
+                    Some("sonnet") => ClaudeModel::Sonnet55,
+                    other => return Err(format!("--model haiku|sonnet|opus, got {other:?}")),
                 })
             }
             "--rules-only" => parsed.model = None,
@@ -144,8 +146,8 @@ async fn probe(classifier: &ClaudeClassifier, calls: usize) {
         for _ in 0..calls {
             match classifier.send_once(body).await {
                 Ok(s) => {
-                    first.extend(s.timing.first_token_ms);
-                    total.push(s.timing.total_ms);
+                    first.extend(s.first_token_ms);
+                    total.push(s.total_ms);
                 }
                 Err(e) => println!("  {name}: {e}"),
             }
@@ -330,6 +332,7 @@ async fn main() {
             // List prices per million tokens (2026-10); cache reads 0.1×, 5-minute writes 1.25×.
             let (price_in, price_out) = match model {
                 ClaudeModel::Haiku55 => (0.10, 0.50),
+                ClaudeModel::Sonnet55 => (2.00, 10.00),
                 ClaudeModel::Opus55 => (4.00, 20.00),
             };
             let cost = (input as f64 + read as f64 * 0.1 + write as f64 * 1.25) * price_in / 1e6

@@ -20,6 +20,7 @@ import {
   type TranscriptSegment,
 } from "@/domain/events";
 import type { Intent, Language, SessionStatus } from "@/domain/types";
+import { breakdown, median, type LatencyBreakdown, type LatencyMarks } from "@/domain/latency";
 
 /**
  * The question currently being processed. Deliberately a separate, copied object — never the
@@ -35,6 +36,10 @@ export interface ActiveQuestion {
 
 /** Transcript lines kept for the diagnostics panel (oldest dropped first). */
 export const TRANSCRIPT_LIMIT = 200;
+/** Answered questions whose latency feeds the median. */
+const LATENCY_WINDOW = 20;
+/** The `stt.status` carrying a final's latency is emitted right after that final. */
+const STATUS_AFTER_FINAL_MS = 250;
 
 export interface SessionDiagnostics {
   applied: number;
@@ -62,6 +67,12 @@ export const useSessionStore = defineStore("session", () => {
   /** Question-detection decisions, keyed by the last transcript segment of each utterance. */
   const utteranceBySegment = reactive<Record<string, UtteranceReport>>({});
   const classifierStatus = ref<ClassifierStatus | null>(null);
+  /** Arrival time of each final transcript, and its end-of-speech → final latency. */
+  const finals = new Map<string, { at: number; transcriptionMs: number | null }>();
+  const lastFinal: Partial<Record<string, string>> = {};
+  /** Event times per question (not reactive), and the latency shown once the first word is in. */
+  const latencyMarks = new Map<string, LatencyMarks>();
+  const latencies = reactive<Record<string, LatencyBreakdown>>({});
   const diagnostics = reactive<SessionDiagnostics>({
     applied: 0,
     ignored: 0,
@@ -116,6 +127,12 @@ export const useSessionStore = defineStore("session", () => {
     if (event.type === "utterance.classified") {
       const last = event.utterance.segmentIds.at(-1);
       if (last) utteranceBySegment[last] = event.utterance;
+      const questionId = event.utterance.questionId;
+      const marks = questionId ? latencyMarks.get(questionId) : undefined;
+      if (marks && event.utterance.decision === "question" && event.utterance.stage === "llm") {
+        marks.classifyMs = event.utterance.latencyMs;
+        settleLatency(questionId!);
+      }
       return event;
     }
     if (event.type === "stt.status") {
@@ -128,10 +145,24 @@ export const useSessionStore = defineStore("session", () => {
         droppedChunks: event.droppedChunks,
       };
       sttStatus.value = { ...sttStatus.value, [status.source]: status };
+      const segmentId = lastFinal[status.source];
+      const final = segmentId ? finals.get(segmentId) : undefined;
+      if (
+        final &&
+        final.transcriptionMs === null &&
+        status.lastFinalLatencyMs !== null &&
+        now - final.at <= STATUS_AFTER_FINAL_MS
+      ) {
+        final.transcriptionMs = status.lastFinalLatencyMs;
+      }
       return event;
     }
     if (event.type === "transcript.partial" || event.type === "transcript.final") {
       upsertSegment(event.segment);
+      if (event.type === "transcript.final" && !finals.has(event.segment.id)) {
+        finals.set(event.segment.id, { at: now, transcriptionMs: null });
+        lastFinal[event.segment.sourceId] = event.segment.id;
+      }
       return event;
     }
     if (!isCardEvent(event)) return event;
@@ -146,6 +177,15 @@ export const useSessionStore = defineStore("session", () => {
 
     if (event.type === "question.detected") {
       const q = event.question;
+      const lastSegment = q.sourceSegmentIds.at(-1);
+      const final = lastSegment ? finals.get(lastSegment) : undefined;
+      latencyMarks.set(q.id, {
+        transcriptionMs: final?.transcriptionMs ?? null,
+        finalAt: final?.at ?? null,
+        detectedAt: now,
+        classifyMs: null,
+        firstWordAt: null,
+      });
       active.value = {
         questionId: q.id,
         question: q.normalizedQuestion,
@@ -153,6 +193,12 @@ export const useSessionStore = defineStore("session", () => {
         language: q.language,
         detectedAt: q.detectedAt,
       };
+    } else if (event.type === "answer.delta" && event.delta.trim()) {
+      const marks = latencyMarks.get(event.questionId);
+      if (marks && marks.firstWordAt === null) {
+        marks.firstWordAt = now;
+        settleLatency(event.questionId);
+      }
     } else if (event.type === "question.revised" && active.value?.questionId === event.questionId) {
       const card = getCardByQuestion(cardState, event.questionId);
       if (card) active.value = { ...active.value, question: card.question };
@@ -170,12 +216,35 @@ export const useSessionStore = defineStore("session", () => {
         const dropped = transcript.order.shift()!;
         delete transcript.byId[dropped];
         delete utteranceBySegment[dropped];
+        finals.delete(dropped);
       }
     }
     transcript.byId[segment.id] = segment;
   }
 
   const transcriptLines = computed(() => transcript.order.map((id) => transcript.byId[id]!));
+
+  /** Replaced only when that question's marks change, so other cards never re-render. */
+  function settleLatency(questionId: string): void {
+    const marks = latencyMarks.get(questionId);
+    const value = marks ? breakdown(marks) : null;
+    if (value) latencies[questionId] = Object.freeze(value);
+  }
+
+  /** Stage by stage, once the first word of the answer is on screen. */
+  function latencyOf(questionId: string): LatencyBreakdown | null {
+    return latencies[questionId] ?? null;
+  }
+
+  /** Median end of speech → first word over the latest spoken questions. */
+  const medianLatencyMs = computed(() =>
+    median(
+      Object.values(latencies)
+        .filter((l) => l.detectionMs !== null)
+        .slice(-LATENCY_WINDOW)
+        .map((l) => l.totalMs),
+    ),
+  );
 
   function reportCommandError(error: AudioError): void {
     commandError.value = error;
@@ -191,6 +260,9 @@ export const useSessionStore = defineStore("session", () => {
     transcript.byId = {};
     transcript.order = [];
     for (const key of Object.keys(utteranceBySegment)) delete utteranceBySegment[key];
+    for (const key of Object.keys(latencies)) delete latencies[key];
+    latencyMarks.clear();
+    finals.clear();
   }
 
   return {
@@ -206,6 +278,8 @@ export const useSessionStore = defineStore("session", () => {
     sttStatus,
     utteranceBySegment,
     classifierStatus,
+    latencyOf,
+    medianLatencyMs,
     cards,
     inFlightCount,
     diagnostics,

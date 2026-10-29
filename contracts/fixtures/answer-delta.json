@@ -1,0 +1,8 @@
+{
+  "type": "answer.delta",
+  "questionId": "session-1761649200000-q2",
+  "requestId": "session-1761649200000-q2-a1",
+  "seq": 3,
+  "section": "details",
+  "delta": "```ts\nconst store = useStore()\n```"
+}

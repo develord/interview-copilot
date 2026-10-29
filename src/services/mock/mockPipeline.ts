@@ -93,21 +93,6 @@ export class MockPipeline implements SessionController {
     void this.generate(question.id, 300);
   }
 
-  /**
-   * Simulated answer for a question detected by the live pipeline, until the answer engine
-   * lands (Phase 5). The card, retries and cancellation follow the production paths.
-   */
-  answerDetected(question: DetectedQuestion): void {
-    if (this.scripts.has(question.id)) return;
-    this.scripts.set(question.id, {
-      primary:
-        question.language === "en"
-          ? `Mock answer: the answer engine arrives in Phase 5. Detected intent: ${question.intent}.`
-          : `Réponse simulée : le moteur de réponse arrive en phase 5. Intention détectée : ${question.intent}.`,
-    });
-    void this.generate(question.id, 300);
-  }
-
   retry(questionId: string): void {
     if (!this.scripts.has(questionId)) return;
     void this.generate(questionId, 300);

@@ -14,6 +14,7 @@ use super::assembler::Utterance;
 use super::classifier::{
     Classification, ClassifyRequest, ContextLine, RecentQuestion, Relation, Speaker,
 };
+use super::engine::Escalated;
 use super::rules::{self, Hints, Verdict};
 use super::text;
 use super::types::{
@@ -66,6 +67,16 @@ pub struct Pending {
     utterance: Utterance,
     utterance_id: String,
     hints: Hints,
+}
+
+impl Pending {
+    /// The utterance as announced before the model decides.
+    pub fn escalated(&self) -> Escalated {
+        Escalated {
+            segment_ids: self.utterance.segment_ids.clone(),
+            text: self.request.utterance.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]

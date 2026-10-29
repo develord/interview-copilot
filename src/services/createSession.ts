@@ -1,6 +1,8 @@
 import { watch } from "vue";
 import { asAudioError, type AudioConfig } from "@/domain/audio";
 import { parseTerms } from "@/domain/stt";
+import type { AnswerModel } from "@/domain/answer";
+import type { answerBackend as AnswerBackend } from "@/platform/answerBackend";
 import type { AudioBackend } from "@/platform/audioBackend";
 import type { useOverlaySettings } from "@/stores/overlaySettings";
 import type { useSessionStore } from "@/stores/session";
@@ -13,22 +15,31 @@ interface Dependencies {
   settings: ReturnType<typeof useOverlaySettings>;
   /** `null` outside the desktop app: only the demo is available. */
   backend: AudioBackend | null;
+  /** The Rust answer engine; required with `backend`. */
+  answers?: Pick<typeof AnswerBackend, "configure" | "askManual" | "retry" | "cancelAll">;
 }
 
 /**
  * Assembles the session controller and its subscriptions: demo pipeline, live audio session,
- * Rust pipeline events → store, mode switching, and live mute changes.
+ * Rust pipeline events → store, mode switching, live mute changes and the answer model.
  */
-export function createSession({ session, settings, backend }: Dependencies) {
+export function createSession({ session, settings, backend, answers }: Dependencies) {
   const demo = new MockPipeline({ emit: (event) => session.dispatch(event) });
-  const live = backend
-    ? new LiveAudioSession({
-        backend,
-        getConfig: () => audioConfig(settings),
-        onCommandError: (error) => session.reportCommandError(error),
-        answers: demo,
-      })
-    : null;
+  // Answer commands report through answer.* events; a rejected command (empty text) is moot.
+  const ignore = () => {};
+  const live =
+    backend && answers
+      ? new LiveAudioSession({
+          backend,
+          getConfig: () => audioConfig(settings),
+          onCommandError: (error) => session.reportCommandError(error),
+          answers: {
+            askManual: (text) => void answers.askManual(text).catch(ignore),
+            retry: (questionId) => void answers.retry(questionId).catch(ignore),
+            cancelAll: () => void answers.cancelAll().catch(ignore),
+          },
+        })
+      : null;
   const router = new SessionRouter({ demo, live }, settings.sessionMode);
   const cleanups: Array<() => void> = [];
 
@@ -36,14 +47,18 @@ export function createSession({ session, settings, backend }: Dependencies) {
     // A webview reload must never leave an invisible capture running in Rust.
     void backend.stop().catch(() => {});
     void backend
-      .onPipelineEvent((payload) => {
-        const event = session.dispatch(payload);
-        // Answers to detected questions stay simulated until the answer engine (Phase 5).
-        if (event?.type === "question.detected" && event.question.source === "speech") {
-          demo.answerDetected(event.question);
-        }
-      })
+      .onPipelineEvent((payload) => session.dispatch(payload))
       .then((unlisten) => cleanups.push(unlisten));
+  }
+  if (answers) {
+    cleanups.push(
+      watch(
+        () => [settings.answers.model, settings.answers.earlyStart] as const,
+        ([model, earlyStart]: readonly [AnswerModel, boolean]) =>
+          void answers.configure(model, earlyStart).catch(ignore),
+        { immediate: true },
+      ),
+    );
   }
 
   cleanups.push(

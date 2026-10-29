@@ -18,7 +18,8 @@ capture worker ──20 ms PCM16──► SttSink (FrameSink, never blocks the w
                            │       · ForceEndpoint after 700 ms of silence ("fast endpoint")
                            ▼ bounded queue (~5 s)
                         supervisor ── provider connection (Codec + shared WebSocket loop),
-                           │          reconnects 0.5→16 s, drops audio queued while
+                           │          reconnects 0.5→5 s for as long as an outage lasts
+                           │          (auth errors stop at once), drops audio queued while
                            │          disconnected (never replays it)
                            ▼
                           mapper ── transcript.partial / transcript.final with stable ids

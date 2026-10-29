@@ -133,12 +133,21 @@ describe("createSession (desktop wiring)", () => {
     setActivePinia(createPinia());
   });
 
-  function setup() {
+  function fakeAnswers() {
+    return {
+      configure: vi.fn(async () => {}),
+      askManual: vi.fn(async () => "manual-1"),
+      retry: vi.fn(async () => {}),
+      cancelAll: vi.fn(async () => {}),
+    };
+  }
+
+  function setup(answers = fakeAnswers()) {
     const session = useSessionStore();
     const settings = useOverlaySettings();
     settings.sessionMode = "live";
     const fake = fakeBackend();
-    const created = createSession({ session, settings, backend: fake.backend });
+    const created = createSession({ session, settings, backend: fake.backend, answers });
     return { session, settings, created, ...fake };
   }
 
@@ -204,37 +213,59 @@ describe("createSession (desktop wiring)", () => {
     expect(audioConfig(settings).questions).toBeNull();
   });
 
-  it("answers a question detected in Rust with a simulated answer in its own card", async () => {
-    vi.useFakeTimers();
-    try {
-      const { session, emitFromRust } = setup();
-      await vi.waitFor(() => expect(session.status).toBe("idle"));
-      const question = {
-        id: "session-1-q1",
-        sessionId: "session-1",
-        source: "speech",
-        sourceSegmentIds: ["system-1-0"],
-        originalUtterance: "Comment tu gères le state dans Vue ?",
-        normalizedQuestion: "Comment gères-tu le state dans Vue ?",
-        intent: "TECHNICAL_QUESTION",
-        language: "fr",
-        domain: "frontend",
-        contextRef: null,
-        detectedAt: 1,
-      };
-      emitFromRust({ type: "question.detected", question });
-      // The same question again (a replayed event) must not start a second answer.
-      emitFromRust({ type: "question.detected", question });
+  it("sends live manual questions, retries and cancellation to the Rust answer engine", () => {
+    const answers = fakeAnswers();
+    const { created } = setup(answers);
+    created.controller.setMode("live");
+    created.controller.askManual("Qu'est-ce qu'une closure ?");
+    created.controller.retry("q1");
+    created.controller.cancelAll();
+    expect(answers.askManual).toHaveBeenCalledWith("Qu'est-ce qu'une closure ?");
+    expect(answers.retry).toHaveBeenCalledWith("q1");
+    expect(answers.cancelAll).toHaveBeenCalled();
+  });
 
-      await vi.runAllTimersAsync();
-      expect(session.cards).toHaveLength(1);
-      const card = session.cards[0]!;
-      expect(card.question).toBe("Comment gères-tu le state dans Vue ?");
-      expect(card.status).toBe("completed");
-      expect(card.answer).toContain("TECHNICAL_QUESTION");
-      expect(card.attempt).toBe(1);
-    } finally {
-      vi.useRealTimers();
-    }
+  it("configures the answer model at startup and when it changes", async () => {
+    const answers = fakeAnswers();
+    const { settings } = setup(answers);
+    expect(answers.configure).toHaveBeenCalledWith("claude-sonnet-5-5", true);
+    settings.answers.model = "claude-haiku-5-5";
+    await nextTick();
+    expect(answers.configure).toHaveBeenLastCalledWith("claude-haiku-5-5", true);
+    settings.answers.earlyStart = false;
+    await nextTick();
+    expect(answers.configure).toHaveBeenLastCalledWith("claude-haiku-5-5", false);
+  });
+
+  it("writes the answer streamed by Rust into the question's card", async () => {
+    const { session, emitFromRust } = setup(fakeAnswers());
+    await vi.waitFor(() => expect(session.status).toBe("idle"));
+    const question = {
+      id: "session-1-q1",
+      sessionId: "session-1",
+      source: "speech",
+      sourceSegmentIds: ["system-1-0"],
+      originalUtterance: "Comment tu gères le state dans Vue ?",
+      normalizedQuestion: "Comment gères-tu le state dans Vue ?",
+      intent: "TECHNICAL_QUESTION",
+      language: "fr",
+      domain: "frontend",
+      contextRef: null,
+      detectedAt: 1,
+    };
+    const ids = { questionId: question.id, requestId: "session-1-q1-a1" };
+    emitFromRust({ type: "question.detected", question });
+    emitFromRust({ type: "answer.started", ...ids });
+    emitFromRust({ type: "answer.delta", ...ids, seq: 0, section: "primary", delta: "J'utilise " });
+    emitFromRust({ type: "answer.delta", ...ids, seq: 1, section: "primary", delta: "Pinia." });
+    const code = "```ts\nconst x = 1\n```";
+    emitFromRust({ type: "answer.delta", ...ids, seq: 2, section: "details", delta: code });
+    emitFromRust({ type: "answer.completed", ...ids });
+
+    expect(session.cards).toHaveLength(1);
+    const card = session.cards[0]!;
+    expect(card.status).toBe("completed");
+    expect(card.answer).toBe("J'utilise Pinia.");
+    expect(card.details).toBe(code);
   });
 });

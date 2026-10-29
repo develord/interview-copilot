@@ -3,8 +3,9 @@
 //! - **feeder**: receives 20 ms frames from the capture worker, pads silence to keep real-time
 //!   pace, runs the local VAD (forcing an endpoint after the configured silence), and groups
 //!   audio into 80 ms chunks;
-//! - **supervisor**: runs provider connections, reconnecting with bounded backoff. Audio that
-//!   queued up while disconnected is dropped, never replayed;
+//! - **supervisor**: runs provider connections, reconnecting with backoff (doubling, then at
+//!   most every 5 s, for as long as a network outage lasts). Audio that queued up while
+//!   disconnected is dropped, never replayed;
 //! - **mapper**: turns provider events into `transcript.partial` / `transcript.final` events
 //!   with stable ids (`{source}-{connection}-{turn}`), so a partial update never becomes a
 //!   second segment, and reports `stt.status`.
@@ -39,6 +40,9 @@ const DEFAULT_END_SILENCE_MS: u32 = 700;
 const MAX_TEXT_CHARS: usize = 4_000;
 /// A voice frame older than this is not used to compute time-to-final.
 const LATENCY_HORIZON: Duration = Duration::from_secs(10);
+/// Once the backoff budget is spent, a network outage is retried at this pace for as long as
+/// it lasts: the session never gives up on a recoverable error.
+const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
 pub struct SessionOptions {
     pub source: SourceKind,
@@ -214,7 +218,9 @@ async fn supervise(
                 }
                 attempt += 1;
                 let delay = if error.is_recoverable() {
-                    policy.delay(attempt)
+                    policy
+                        .delay(attempt.min(policy.max_attempts))
+                        .map(|d| d.min(MAX_RECONNECT_DELAY))
                 } else {
                     None
                 };
@@ -623,6 +629,26 @@ mod tests {
             .collect();
         assert!(states.contains(&SttState::Reconnecting), "{states:?}");
         assert_eq!(states.last(), Some(&SttState::Closed));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_network_outage_longer_than_the_backoff_budget_is_still_retried() {
+        // The test policy allows 2 attempts; the outage lasts 3 connections.
+        let provider = FakeProvider::new(vec![
+            Script::FailAfter(1, SttErrorCode::Network),
+            Script::FailAfter(1, SttErrorCode::Network),
+            Script::FailAfter(1, SttErrorCode::Network),
+            Script::Transcribe,
+        ]);
+        let (emit, events) = recorder();
+        let mut sink = spawn(&Handle::current(), provider.clone(), options(None), emit);
+
+        feed(&mut sink, &voice(), 40).await;
+        settle().await;
+
+        assert_eq!(provider.connections.load(Ordering::Relaxed), 4);
+        assert_eq!(last_status(&events).unwrap().state, SttState::Streaming);
+        drop(sink);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

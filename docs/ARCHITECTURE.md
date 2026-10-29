@@ -1,6 +1,6 @@
 # Architecture
 
-Status: Phase 4 (overlay + native audio capture + streaming STT + question detection; answers still simulated). See
+Status: Phase 6 (overlay, native audio capture, streaming STT, question detection, streamed answers from a verified profile, early start, rolling summary, latency per card, Windows installer). See
 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for what is verified.
 
 ## Guiding rule
@@ -34,6 +34,9 @@ answer from overwriting a newer one.
 │ window-state   restores size/position per monitor                              │
 │ audio/ → stt/  WASAPI loopback + mic → 16 kHz → AssemblyAI | Soniox (EU WSS)   │
 │ stt/ → intent/ utterances → rules → Claude (HTTPS, structured JSON) → questions │
+│ answer/        questions + profile/ → Claude Sonnet 5.5 (streamed) → answers    │
+│ pipeline.rs    session wiring: STT → questions → overlay, then answers         │
+│ llm/           shared Claude client, SSE, errors, key in the Credential Manager│
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,9 +89,15 @@ The rules are documented in [UI_STATE_MACHINE.md](UI_STATE_MACHINE.md) and enfor
   to the STT sessions: assembler → rules → Claude classifier, emitting `question.detected`,
   `question.revised`, `utterance.classified` and `classifier.status`. The Claude key is in the
   Credential Manager. Details: [QUESTION_DETECTION.md](QUESTION_DETECTION.md).
-- **Phase 5:** answer engine in Rust, streaming `answer.*` events for the detected questions;
-  it replaces the simulated answers from `MockPipeline`. No card component changes are
-  expected.
+- **Phase 5 (done, not measured yet):** the answer engine runs in Rust and streams `answer.*`
+  events for detected and typed questions, using the verified profile imported from a CV. It
+  replaces the simulated answers in live mode; no card component changed. Details:
+  [ANSWER_ENGINE.md](ANSWER_ENGINE.md).
+- **Phase 6 (done, tested without paid APIs):** `pipeline.rs` wires a session in one place. An
+  answer starts when its utterance goes to the classifier, held until the decision. A rolling
+  summary keeps long interviews in context. Transcription reconnects for as long as an outage
+  lasts. Each card shows its latency, from the end of speech to the first word. A Windows NSIS
+  installer is built with `scripts/build.ps1`.
 - **History growth:** the list is not virtualized yet (fine for a session's worth of cards). Add
   virtualization when measured render cost requires it; card keys and scroll policy already
   support it.

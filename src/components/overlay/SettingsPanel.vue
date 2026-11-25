@@ -70,6 +70,13 @@ onMounted(async () => {
     </div>
 
     <div class="group">
+      <label class="row check">
+        <input v-model="settings.latestOnly" type="checkbox" />
+        <span>Afficher seulement la dernière question</span>
+      </label>
+    </div>
+
+    <div v-if="!settings.latestOnly" class="group">
       <span class="label">Ordre des réponses</span>
       <div class="segmented" role="radiogroup">
         <button

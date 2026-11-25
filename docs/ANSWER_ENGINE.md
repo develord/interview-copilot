@@ -12,7 +12,7 @@ question.detected (speech, from the question engine) ─┤  adopts the held ans
 answer_ask_manual (overlay text field) ───────────────┤
                                                       ▼
                           AnswerEngine (Rust, one task per question)
-                              │ prompt answer.v1 + verified profile (cached)
+                              │ prompt answer.v2 + verified profile (cached)
                               │ + rolling summary + last 12 lines
                               ▼
                           Claude Sonnet 5.5, streamed
@@ -28,8 +28,13 @@ answer_ask_manual (overlay text field) ─────────────�
   (`{question}-a{n}`). A retry or a restart aborts only that question's previous request; late
   tokens of an aborted request carry its old id and are rejected by the card lifecycle as
   stale (rules 2 and 6, [UI_STATE_MACHINE.md](UI_STATE_MACHINE.md)).
-- **Revisions.** A `question.revised` restarts the answer while it is still being written. A
-  completed answer is immutable; the card records the revision instead (rule 4).
+- **Revisions.** A `question.revised` writes the answer again, even a completed one: either a
+  pause split the question, so the answer was for its first half, or the interviewer narrowed
+  it ("En production, j'entends"). The card adopts the revised question (rule 4).
+- **Reading check.** The question engine asks `reads_answer` whether microphone speech comes
+  from one of the 3 latest answers shown (both sections). Testing alone with « Questions au
+  micro », the candidate reading an answer out, or speaking from it, is then not a question
+  ([QUESTION_DETECTION.md](QUESTION_DETECTION.md)).
 - **Manual questions** are sent to Rust in live mode. They get their intent from the first-stage
   rules, `source: "manual"`, and the same answer path, whatever their intent. The demo mode
   keeps the mock pipeline.
@@ -50,6 +55,10 @@ classifier, it also tells the answer engine (`on_escalate`), which starts the an
   The utterance is matched by its transcript segment ids. No second request is made.
 - **Follow-up:** the held answer is dropped. A new one starts with the earlier question and
   its answer, which the early request did not have.
+- **Repaired words:** the held answer is also dropped when the classifier's question has a
+  content word the utterance lacked, give or take an ending: a term it repaired ("M et REM" →
+  "em et rem") or a reference it resolved. The answer then starts from the cleaned question,
+  about 1 s later, instead of answering misheard words.
 - **Anything else** (statement, repeat, precision of an earlier question): the held answer is
   aborted when `utterance.classified` arrives. It is also dropped after 20 s without a
   decision, and at most 4 are held at once.
@@ -83,16 +92,16 @@ Cost: about $0.0003 per call.
 
 ## Request
 
-| Item          | Value                                                                                                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model         | Claude Sonnet 5.5 by default; Haiku 5.5 and Opus 5.5 in Réglages › Audio › Réponses                                                                                          |
-| Thinking      | Off: `{"type": "between_tools"}` on Sonnet, `disabled` on Haiku. Opus 5.5 always thinks                                                                                      |
-| Effort        | `medium`                                                                                                                                                                     |
-| Fallback      | `fallbacks: "default"` with the `server-side-fallback-2026-07-01` beta (Sonnet, Opus)                                                                                        |
-| System prefix | [`prompts/answer.v1.md`](../src-tauri/prompts/answer.v1.md), then the verified profile, with one `cache_control` breakpoint after both                                       |
-| User message  | The last 12 transcript lines (interviewer and candidate), the earlier question and answer for a follow-up, the question with its intent and language, and the words as heard |
-| Output        | Main answer (2–5 sentences, ≤ ~90 words, no list or code), then optionally `<<<DETAILS>>>` and the details (code fences, complexity, trade-offs, STAR outline)               |
-| Limits        | `max_tokens` 3000; 60 s per response; one retry before the first token for 429/5xx/network errors                                                                            |
+| Item          | Value                                                                                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model         | Claude Sonnet 5.5 by default; Haiku 5.5 and Opus 5.5 in Réglages › Audio › Réponses                                                                              |
+| Thinking      | Off: `{"type": "between_tools"}` on Sonnet, `disabled` on Haiku. Opus 5.5 always thinks                                                                          |
+| Effort        | `medium`                                                                                                                                                         |
+| Fallback      | `fallbacks: "default"` with the `server-side-fallback-2026-07-01` beta (Sonnet, Opus)                                                                            |
+| System prefix | [`prompts/answer.v2.md`](../src-tauri/prompts/answer.v2.md), then the verified profile, with one `cache_control` breakpoint after both                           |
+| User message  | The last 12 transcript lines (interviewer and candidate), the earlier question and answer for a follow-up, and the cleaned question with its intent and language |
+| Output        | Main answer: 2 or 3 lines « - terme : fait » of ≤ ~12 words, no opener, no code; then optionally `<<<DETAILS>>>` and at most 4 lines or one short code block     |
+| Limits        | `max_tokens` 3000; 60 s per response; one retry before the first token for 429/5xx/network errors                                                                |
 
 The prompt sets the rules (PRD §5):
 
@@ -170,8 +179,8 @@ Results: **not run yet.**
 
 - **Follow-ups gain nothing from early start:** they need the earlier exchange, so they start
   after the decision.
-- An early answer is written from the words as heard. The classifier's cleaned question is
-  only used on a retry.
+- An early answer is written from the words as heard. It is kept only when the cleaned question
+  adds no content word; a mishearing that the classifier did not repair stays in it.
 - The summary is not checked against the transcript: a recognition error can end up in it.
 - The intent of a manual question comes from the rules only.
 - Only the main answer of a follow-up's earlier question is passed on, not its details.

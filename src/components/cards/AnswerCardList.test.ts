@@ -55,6 +55,8 @@ describe("AnswerCardList", () => {
     pinia = createPinia();
     setActivePinia(pinia);
     renders.clear();
+    // These tests are about the history; the newest-only view has its own test.
+    useOverlaySettings().latestOnly = false;
     controller = {
       start: vi.fn(),
       pause: vi.fn(),
@@ -127,6 +129,19 @@ describe("AnswerCardList", () => {
     await flushPromises();
     expect(order()).toEqual(["card:q2", "card:q1"]);
     expect(wrapper.get('[data-card-id="card:q1"]').element).toBe(first);
+  });
+
+  it("by default shows only the newest question, still linked to the one it follows", async () => {
+    const store = useSessionStore();
+    useOverlaySettings().latestOnly = true;
+    const wrapper = mountList();
+    store.dispatch({ type: "question.detected", question: question("q1", "First") });
+    store.dispatch({ type: "question.detected", question: question("q2", "Pourquoi ?", "q1") });
+    await flushPromises();
+
+    const shown = wrapper.findAll("[data-card-id]").map((w) => w.attributes("data-card-id"));
+    expect(shown).toEqual(["card:q2"]);
+    expect(wrapper.text()).toContain("Suite de : First");
   });
 
   it("shows the follow-up link and offers retry on a failed card", async () => {

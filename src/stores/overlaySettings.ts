@@ -24,6 +24,8 @@ const settingsSchema = z.object({
   opacity: z.number().min(0.4).max(1).catch(1),
   alwaysOnTop: z.boolean().catch(true),
   order: z.enum(["newest-last", "newest-first"]).catch("newest-last"),
+  /** Show only the newest question's card: a new question replaces the previous one. */
+  latestOnly: z.boolean().catch(true),
   compact: z.boolean().catch(false),
   /** Logical window height to restore when leaving compact mode. */
   expandedHeight: z.number().positive().nullable().catch(null),

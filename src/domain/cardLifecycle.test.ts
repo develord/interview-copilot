@@ -248,19 +248,43 @@ describe("card lifecycle — rule 4: transcript revisions", () => {
     expect(card(state, "q1").questionRevisions).toEqual([]);
   });
 
-  it("records a correction instead of overwriting once answering has started", () => {
+  it("updates the question while the answer streams, since Rust restarts it", () => {
     const state = createCardState();
     applyAll(state, [
       detected(question("q1", { normalizedQuestion: "What is a closure?" })),
       started("q1", "r1"),
       delta("q1", "r1", 0, "A closure is…"),
       { type: "question.revised", questionId: "q1", text: "What is a closure in Rust?" },
+      started("q1", "r2"),
     ]);
 
     const a = card(state, "q1");
-    expect(a.question).toBe("What is a closure?");
-    expect(a.questionRevisions).toEqual(["What is a closure in Rust?"]);
+    expect(a.question).toBe("What is a closure in Rust?");
+    expect(a.questionRevisions).toEqual([]);
+    expect(a.answer).toBe("");
+    expect(applyEvent(state, delta("q1", "r1", 1, " late"), NOW).applied).toBe(false);
+  });
+
+  it("records a correction once the answer is complete; a restart then adopts it", () => {
+    const state = createCardState();
+    applyAll(state, streamFor("q1", "r1", ["A closure is…"]));
+    applyEvent(
+      state,
+      { type: "question.revised", questionId: "q1", text: "Closures in Rust?" },
+      NOW,
+    );
+
+    const a = card(state, "q1");
+    expect(a.question).toBe("question q1");
+    expect(a.questionRevisions).toEqual(["Closures in Rust?"]);
     expect(a.answer).toBe("A closure is…");
+
+    // Rust restarts a finished answer only when the revision came seconds after the question.
+    applyAll(state, [started("q1", "r2"), delta("q1", "r2", 0, "In Rust."), completed("q1", "r2")]);
+    expect(a.question).toBe("Closures in Rust?");
+    expect(a.questionRevisions).toEqual([]);
+    expect(a.answer).toBe("In Rust.");
+    expect(a.status).toBe("completed");
   });
 });
 

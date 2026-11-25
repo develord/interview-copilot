@@ -18,7 +18,7 @@ use tokio::time::Instant;
 
 use super::assembler::{Assembler, AssemblerConfig, Utterance};
 use super::classifier::Classifier;
-use super::detector::{Detector, DetectorConfig, Step};
+use super::detector::{AnswerCheck, Detector, DetectorConfig, Step};
 use super::types::{ClassifierState, ClassifierStatus, ClassifyError, ClassifyErrorCode};
 use crate::audio::engine::Emit;
 use crate::audio::types::SourceKind;
@@ -30,6 +30,8 @@ pub struct EngineOptions {
     pub assembler: AssemblerConfig,
     /// Told when an utterance goes to the model, before its decision.
     pub on_escalate: Option<OnEscalate>,
+    /// Recognises the candidate reading an answer, when microphone speech counts as questions.
+    pub reads_answer: Option<AnswerCheck>,
 }
 
 /// An interviewer utterance sent to the model, whose decision is not known yet. The answer
@@ -99,7 +101,10 @@ pub fn spawn(
         utterance_tx,
         epoch,
     ));
-    let detector = Detector::new(options.session_id, options.detector, classifier.is_some());
+    let mut detector = Detector::new(options.session_id, options.detector, classifier.is_some());
+    if let Some(check) = options.reads_answer {
+        detector.set_answer_check(check);
+    }
     runtime.spawn(classify(
         detector,
         classifier,
@@ -311,6 +316,7 @@ mod tests {
             detector: DetectorConfig::DEFAULT,
             assembler: AssemblerConfig::DEFAULT,
             on_escalate: None,
+            reads_answer: None,
         }
     }
 

@@ -116,6 +116,8 @@ pub enum IgnoreReason {
     Repeat,
     /// A real question outside the technical-only scope (greeting, career, behavioral).
     NotTechnical,
+    /// Microphone speech in tests: the candidate reading out or speaking from an answer.
+    ReadingAnswer,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

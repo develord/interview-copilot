@@ -5,8 +5,14 @@ APIs; the user's end-of-development test is next.**
 
 - **Phase 6:** answers start while the classifier decides; long interviews get a rolling
   summary; transcription reconnects for as long as a network outage lasts; latency is shown
-  per card; Windows installer. Since then, only technical questions get a card and an answer
-  (setting on by default).
+  per card; Windows installer. Since then: only technical questions get a card and an answer
+  (setting on by default); a question split by a pause, or narrowed later by the interviewer,
+  is shown whole and answered again; testing on the microphone, reading an answer out is not a
+  question;
+  accessibility terms in the vocabulary, and classifier prompt v4 (not benched); answer prompt
+  v2: main answers of 2 or 3 short « - » lines that never question the wording, and no raw
+  transcription in the request; an early answer to misheard words is dropped; only the newest
+  question's card is shown (setting on by default).
 - **Phase 5:** answers stream from Claude Sonnet 5.5 into the question's card. A verified
   profile is imported from a CV PDF and reviewed before use. `answer-bench` is not run yet.
 - **Phase 4:** measured. On the hold-out corpus: 94 % recall, no false positive, about 1.2 s per
@@ -315,16 +321,19 @@ spend no credit. The user tests everything live at the end of development.
 
 ### Deliverables
 
-| Deliverable                                                                                       | Where                                                                             | Verified how                                                                                                                                                                                             |
-| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Early start: the answer starts when the utterance goes to the classifier, held until the decision | `answer/engine.rs` (`speculate`, `Route`), `intent/engine.rs` (`on_escalate`)     | 4 tests: held output never shown, replayed into the card with one request (finished, and still streaming with contiguous `seq`), dropped for a statement; the engine announces escalated utterances only |
-| « Réponse anticipée » switch (on by default)                                                      | `AnswerSettings.vue`, `overlaySettings.ts`, `answer_configure`                    | Wiring test: model and switch sent at start and on change                                                                                                                                                |
-| Rolling summary of the lines that leave the context (Haiku 5.5)                                   | `answer/summary.rs`, `prompts/summary.v1.md`                                      | 2 tests: request shape; 24 lines → one summary call, then the summary is in the next answer                                                                                                              |
-| Session wiring in one place (overlay first, then answers; detection; early start)                 | `pipeline.rs`, `audio/commands.rs`                                                | End-to-end test: two transcripts → a statement with no card, and a card with its streamed answer, two requests, nothing extra on screen                                                                  |
-| Transcription never gives up on a network outage (backoff, then every 5 s)                        | `stt/session.rs`                                                                  | Test: an outage longer than the backoff budget is still recovered; an auth error is still not retried                                                                                                    |
-| Latency per card: end of speech → first word, by stage                                            | `domain/latency.ts`, `stores/session.ts`, `AnswerCard.vue`, `TranscriptPanel.vue` | Store test with timed events (transcription 0.7 s, detection 1.2 s with Claude 1.1 s, answer 0.06 s); the card-isolation test still passes                                                               |
-| Technical questions only (on by default): other questions get no card and no answer               | `intent/detector.rs`, `QuestionSettings.vue`, `overlaySettings.ts`                | Detector test: greeting, behavioral question and its follow-up left out; a technical question and its follow-up kept. Transcript tag « Ignoré · question non technique »                                 |
-| Windows installer                                                                                 | `scripts/build.ps1` (`pnpm tauri build`, NSIS)                                    | Built: `src-tauri/target/release/bundle/nsis/Interview Copilot_0.1.0_x64-setup.exe` (2.5 MB). Not installed or run here                                                                                  |
+| Deliverable                                                                                       | Where                                                                             | Verified how                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Early start: the answer starts when the utterance goes to the classifier, held until the decision | `answer/engine.rs` (`speculate`, `Route`), `intent/engine.rs` (`on_escalate`)     | 4 tests: held output never shown, replayed into the card with one request (finished, and still streaming with contiguous `seq`), dropped for a statement; the engine announces escalated utterances only                 |
+| « Réponse anticipée » switch (on by default)                                                      | `AnswerSettings.vue`, `overlaySettings.ts`, `answer_configure`                    | Wiring test: model and switch sent at start and on change                                                                                                                                                                |
+| Rolling summary of the lines that leave the context (Haiku 5.5)                                   | `answer/summary.rs`, `prompts/summary.v1.md`                                      | 2 tests: request shape; 24 lines → one summary call, then the summary is in the next answer                                                                                                                              |
+| Session wiring in one place (overlay first, then answers; detection; early start)                 | `pipeline.rs`, `audio/commands.rs`                                                | End-to-end test: two transcripts → a statement with no card, and a card with its streamed answer, two requests, nothing extra on screen                                                                                  |
+| Transcription never gives up on a network outage (backoff, then every 5 s)                        | `stt/session.rs`                                                                  | Test: an outage longer than the backoff budget is still recovered; an auth error is still not retried                                                                                                                    |
+| Latency per card: end of speech → first word, by stage                                            | `domain/latency.ts`, `stores/session.ts`, `AnswerCard.vue`, `TranscriptPanel.vue` | Store test with timed events (transcription 0.7 s, detection 1.2 s with Claude 1.1 s, answer 0.06 s); the card-isolation test still passes                                                                               |
+| Technical questions only (on by default): other questions get no card and no answer               | `intent/detector.rs`, `QuestionSettings.vue`, `overlaySettings.ts`                | Detector test: greeting, behavioral question and its follow-up left out; a technical question and its follow-up kept. Transcript tag « Ignoré · question non technique »                                                 |
+| A question split by a pause or narrowed later: the card shows it whole, the answer is rewritten   | `answer/engine.rs`, `domain/cardLifecycle.ts`, `stores/session.ts`                | Rust test: a revision after a finished answer starts a second request with the revised text. Lifecycle tests: streaming revision updates the question; a restart of a completed card adopts the revision                 |
+| Testing on the microphone: an answer read out, or spoken from, is not a question                  | `answer/engine.rs`, `intent/detector.rs`, `pipeline.rs`                           | Rust tests: an answer read out or paraphrased is recognised, a refinement and a question are not; the detector reports `reading-answer` with the candidate as speaker. Transcript tag « Ignoré · lecture de la réponse » |
+| Vocabulary: ARIA, aria-live, WCAG; prompt v4 spells garbled technical terms                       | `technical-terms.json`, `prompts/classification.v4.md`                            | Vocabulary tests (99 terms, user terms still first). v4 not benched (paid run, by approval)                                                                                                                              |
+| Windows installer                                                                                 | `scripts/build.ps1` (`pnpm tauri build`, NSIS)                                    | Built: `src-tauri/target/release/bundle/nsis/Interview Copilot_0.1.0_x64-setup.exe` (2.5 MB). Not installed or run here                                                                                                  |
 
 ### Acceptance criteria
 
@@ -332,7 +341,7 @@ spend no credit. The user tests everything live at the end of development.
 | -------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Audio to card end to end               | ✅ tests / ⏳ live | `pipeline.rs` test from transcripts to a filled card; the STT session has its own tests; live test by the user                      |
 | Survives provider and network failures | ✅ tests           | STT: reconnects indefinitely; classifier: falls back to the rules; answers: one retry before the first token, then a retryable card |
-| Critical UI and concurrency tests pass | ✅                 | 172 Rust tests, 124 front-end tests (card isolation, stale tokens, ordering)                                                        |
+| Critical UI and concurrency tests pass | ✅                 | 176 Rust tests, 126 front-end tests (card isolation, stale tokens, ordering)                                                        |
 | Latency instrumentation                | ✅                 | Per-card badge with a stage-by-stage tooltip, and the median in the transcript bar                                                  |
 
 ### Known limitations
@@ -391,7 +400,7 @@ cargo clippy --all-targets --features bench                 # 0 warnings
 pnpm check                                                  # lint + typecheck + 17 files, 123 tests passed
 
 # Phase 6
-cargo test                                                  # 172 passed, 4 ignored (after technical-only)
+cargo test                                                  # 176 passed, 4 ignored
 cargo clippy --all-targets --features bench                 # 0 warnings
 pnpm check                                                  # lint + typecheck + 18 files, 124 tests passed
 pnpm tauri build                                            # release build 5 min; Interview Copilot_0.1.0_x64-setup.exe, 2.5 MB

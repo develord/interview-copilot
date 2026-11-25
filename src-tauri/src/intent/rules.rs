@@ -538,7 +538,9 @@ fn domain_of(category: &str) -> &'static str {
         "javascript" | "language" => "languages",
         "security" => "security",
         "testing" => "testing",
-        "concept" | "frontend-framework" | "frontend-library" | "tooling" => "frontend",
+        "accessibility" | "concept" | "frontend-framework" | "frontend-library" | "tooling" => {
+            "frontend"
+        }
         _ => "general",
     }
 }

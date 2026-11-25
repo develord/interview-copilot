@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 const BENCH: &str = include_str!("../../../contracts/answer-bench.v1.json");
 const JUDGE_PROMPT: &str = include_str!("../../prompts/eval-invented-facts.v1.md");
 const JUDGE: ClaudeModel = ClaudeModel::Opus55;
-/// The main answer should be readable in a few seconds (prompt: "at most about 90 words").
-const MAX_PRIMARY_WORDS: usize = 110;
+/// The main answer should be read in one glance (prompt: 2 or 3 lines of ~12 words).
+const MAX_PRIMARY_WORDS: usize = 40;
 
 #[derive(Deserialize)]
 struct Bench {
@@ -190,7 +190,6 @@ async fn main() {
     for case in &bench.cases {
         let input = AnswerInput {
             question: case.question.clone(),
-            as_heard: case.question.clone(),
             intent: Some(case.intent),
             language: Some(case.language),
             summary: None,

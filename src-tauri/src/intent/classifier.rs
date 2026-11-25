@@ -12,8 +12,8 @@ use super::types::{ClassifyError, ClassifyErrorCode, Intent, Language};
 /// Versioned prompt (PRD §5 "versioned files"). Bump the file name when its meaning changes.
 /// v1 and v2 quoted phrases too close to the evaluation corpus; v3 is a third shorter (less
 /// time before the first token) and shares no more than two consecutive words with it.
-pub const PROMPT: &str = include_str!("../../prompts/classification.v3.md");
-pub const PROMPT_VERSION: &str = "classification.v3";
+pub const PROMPT: &str = include_str!("../../prompts/classification.v4.md");
+pub const PROMPT_VERSION: &str = "classification.v4";
 
 const MAX_QUESTION_CHARS: usize = 4_000;
 

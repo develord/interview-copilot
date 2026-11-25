@@ -29,6 +29,10 @@ question.detected · question.revised · utterance.classified · classifier.stat
 Only the system-audio source (the interviewer) asks questions. Microphone speech (the
 candidate) is kept as context for the model. A setting, **Détecter aussi les questions dites
 au micro**, treats microphone speech as interviewer speech so the feature can be tested alone.
+Even then, microphone speech that reads out one of the 3 latest answers, or speaks from it, is
+the candidate's: at least 3 content words, 3 in 5 of them in the answer (give or take an
+ending), and no question. It is reported as ignored (`reading-answer`, « lecture de la
+réponse »), never sent to the model, and kept as candidate context.
 
 **Questions techniques uniquement** (on by default) keeps cards and answers for
 `TECHNICAL_QUESTION`, `CODING_PROBLEM`, `SYSTEM_DESIGN`, and follow-ups on a question that
@@ -47,6 +51,12 @@ comma, colon, ellipsis or hyphen, has no final punctuation, or ends on a continu
 "bien sûr." is complete. Partials from the same speaker extend the wait, with a hard limit of
 **6 s** from the first segment: the wait always ends. A cut turn still waiting when the
 session stops is flushed and classified.
+
+A pause can also split a question whose first half looks complete ("Quel est le rôle de
+aria-live ?" … "en mode polite"). The second half then reaches the model, which calls it a
+`continuation`: the card shows the completed question, and the answer is written again for
+it, even if it had finished. The same goes for the interviewer narrowing the question later
+("En production, j'entends").
 
 ### 2. First stage: rules (`rules.rs`)
 
@@ -89,9 +99,11 @@ One Messages API call per escalated utterance, in Rust: the key never reaches th
     `preserve_order` feature the keys were sorted alphabetically, so the order was accidental.
     It is now explicit: decisive fields first (`requiresResponse`, `intent`, `relation`,
     `contextReference`, `language`), then `question`, `domain`, `urgency`, `confidence`.
-  - The versioned prompt [`prompts/classification.v3.md`](../src-tauri/prompts/classification.v3.md)
-    is the system block, marked with `cache_control: ephemeral`. It is 3.9 kB, a third shorter
-    than v2. The bench shows cache reads on every call after the first.
+  - The versioned prompt [`prompts/classification.v4.md`](../src-tauri/prompts/classification.v4.md)
+    is the system block. v4 is v3 plus one rule and one example: `question` spells a technical
+    term correctly when recognition obviously garbled it ("area live" → `aria-live`). The
+    measurements below are v3's; v4 has not been benched. The prompt is marked with
+    `cache_control: ephemeral`. It is 3.9 kB, a third shorter than v2. The bench shows cache reads on every call after the first.
   - Opus only: `fallbacks: "default"` with the `server-side-fallback-2026-07-01` beta header.
     If a safety classifier declines, the request is re-run server-side on the model Anthropic
     recommends. Haiku 5.5 has no server-side fallback.
@@ -111,8 +123,8 @@ One Messages API call per escalated utterance, in Rust: the key never reaches th
     [0, 1]. An unknown domain becomes null. An empty question falls back to the utterance.
 - **Decision:**
   - A `repeat` creates no card.
-  - A `continuation` revises its target. Rule 4 of the card lifecycle applies: the text
-    updates while the card is pending, and is recorded as a correction afterwards.
+  - A `continuation` revises its target. Rule 4 of the card lifecycle applies: the card shows
+    the revised question, and its answer is written again, even a completed one.
   - Otherwise a card is created when `requiresResponse` is true and the intent is not
     `AMBIGUOUS`, and, with « Questions techniques uniquement », when the question is in scope.
   - An ambiguous fragment creates no card but stays in the context of the next call.

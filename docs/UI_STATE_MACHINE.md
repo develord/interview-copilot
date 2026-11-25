@@ -11,9 +11,11 @@ stateDiagram-v2
     pending --> streaming: answer.started / first delta (implicit start)
     streaming --> streaming: answer.delta (same requestId, next seq)
     streaming --> streaming: answer.started (new requestId — supersedes, explicit policy)
+    streaming --> streaming: question.revised (question text updated; Rust restarts the answer)
     streaming --> completed: answer.completed
     streaming --> failed: answer.failed
     failed --> streaming: answer.started (new requestId — retry)
+    completed --> streaming: answer.started after a question.revised (restart, adopts the revision)
     completed --> [*]
 ```
 
@@ -21,7 +23,7 @@ stateDiagram-v2
 | ----------- | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `pending`   | Question detected, no generation started | `question.revised` (updates text), `answer.started`, implicit start via first `answer.delta`  |
 | `streaming` | Tokens arriving for `requestId`          | deltas/completed/failed for the **current** `requestId`; a new `answer.started` supersedes it |
-| `completed` | Final, immutable answer                  | none (question revisions are recorded as corrections)                                         |
+| `completed` | Final answer                             | `question.revised` (recorded as a correction); then `answer.started` only (restart)           |
 | `failed`    | Generation failed; partial answer kept   | new `answer.started` (retry)                                                                  |
 
 ### Rules
@@ -32,10 +34,12 @@ stateDiagram-v2
    `seq` < expected or already buffered → `duplicate-delta`; `seq` > expected → buffered and
    flushed in order.
 3. **Completed** → terminal. Late deltas → `already-terminal`. A new generation cannot overwrite a
-   completed answer.
-4. **Revised transcript** → updates the question only while `pending`. Once answering started, the
-   revision is appended to `questionRevisions` and shown as a correction note; the answer is
-   untouched.
+   completed answer, except a restart after a revision (rule 4).
+4. **Revised transcript** → updates the question while `pending` or `streaming`. Once the answer
+   has ended, the revision is appended to `questionRevisions` (a correction note). Rust writes
+   the answer again for every revision, the rest of a question cut by a pause or the
+   interviewer narrowing it: the new `answer.started` adopts the latest revision as the
+   question and clears the note.
 5. **Follow-up** → new card with `contextRef` = earlier `questionId`; the referenced card is never
    modified. The UI shows “Suite de : …”.
 6. **Concurrent generations** → independent cards. A new question never cancels another
@@ -69,6 +73,10 @@ Ignored events never throw; the store counts them per reason (`diagnostics.ignor
 
 ## Overlay layers and modes
 
+- **Newest question only** (« Afficher seulement la dernière question », on by default): the
+  history shows only the newest card; a new question replaces the previous one on screen. The
+  older cards stay in the store, so a follow-up still shows « Suite de : … ». Turned off, the
+  list shows every card in the chosen order.
 - **Settings sheet** and **focus view** (enlarged answer) are mutually exclusive; opening one
   closes the other. `Esc` closes whichever is open. In the text field, the first `Esc` clears a
   draft; on an empty field it closes the open layer.

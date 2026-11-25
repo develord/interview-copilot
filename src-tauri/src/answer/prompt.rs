@@ -6,11 +6,11 @@ use crate::intent::types::{Intent, Language};
 use crate::llm::ClaudeModel;
 use crate::profile::Profile;
 
-pub const PROMPT: &str = include_str!("../../prompts/answer.v1.md");
-pub const PROMPT_VERSION: &str = "answer.v1";
+pub const PROMPT: &str = include_str!("../../prompts/answer.v2.md");
+pub const PROMPT_VERSION: &str = "answer.v2";
 /// Separates the main answer from the details (see the prompt's "Format").
 pub const DETAILS_MARKER: &str = "<<<DETAILS>>>";
-/// The main answer is ~90 words; details can carry code.
+/// The main answer is 2 or 3 short lines; details can carry code.
 const MAX_TOKENS: u32 = 3_000;
 const MAX_EARLIER_ANSWER_CHARS: usize = 1_200;
 
@@ -18,8 +18,6 @@ const MAX_EARLIER_ANSWER_CHARS: usize = 1_200;
 pub struct AnswerInput {
     /// The normalized question shown on the card.
     pub question: String,
-    /// What was actually said, when it differs.
-    pub as_heard: String,
     /// `None` for an early answer, started before the classifier decides: the model then
     /// picks the template and the language itself.
     pub intent: Option<Intent>,
@@ -103,12 +101,6 @@ pub fn render_user_message(input: &AnswerInput) -> String {
         "<question{attributes}>{}</question>",
         sanitize(&input.question)
     ));
-    if input.as_heard.trim() != input.question.trim() && !input.as_heard.trim().is_empty() {
-        out.push_str(&format!(
-            "\n<as_heard>{}</as_heard>",
-            sanitize(&input.as_heard)
-        ));
-    }
     out
 }
 
@@ -136,7 +128,6 @@ mod tests {
     fn input() -> AnswerInput {
         AnswerInput {
             question: "Pourquoi as-tu choisi Pinia ?".into(),
-            as_heard: "Et pourquoi Pinia du coup ?".into(),
             intent: Some(Intent::ClarificationOrFollowUp),
             language: Some(Language::Fr),
             summary: None,
@@ -158,23 +149,21 @@ mod tests {
     }
 
     #[test]
-    fn the_user_message_carries_context_follow_up_and_the_heard_text() {
+    fn the_user_message_carries_context_follow_up_and_the_question() {
         let message = render_user_message(&input());
         assert_eq!(
             message,
             "<transcript>\n[interviewer] Tu utilises quoi pour le  state  ?\n[candidate] Pinia.\n</transcript>\n\
              <earlier_question>Quel state management utilises-tu ?</earlier_question>\n\
              <earlier_answer>J'utilise Pinia.</earlier_answer>\n\
-             <question intent=\"CLARIFICATION_OR_FOLLOW_UP\" language=\"fr\">Pourquoi as-tu choisi Pinia ?</question>\n\
-             <as_heard>Et pourquoi Pinia du coup ?</as_heard>"
+             <question intent=\"CLARIFICATION_OR_FOLLOW_UP\" language=\"fr\">Pourquoi as-tu choisi Pinia ?</question>"
         );
         let mut plain = input();
-        plain.as_heard = plain.question.clone();
         plain.earlier = None;
         plain.transcript.clear();
         let message = render_user_message(&plain);
         assert!(message.contains("(no transcript)"));
-        assert!(!message.contains("as_heard") && !message.contains("earlier"));
+        assert!(!message.contains("earlier"));
         assert!(!message.contains("interview_summary"));
     }
 

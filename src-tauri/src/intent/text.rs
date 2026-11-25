@@ -57,6 +57,36 @@ pub fn contains(words: &[String], pattern: &[String]) -> bool {
     !pattern.is_empty() && words.windows(pattern.len()).any(|w| w == pattern)
 }
 
+/// Words that carry no topic: articles, pronouns, question words and spoken fillers.
+const FUNCTION_WORDS: &[&str] = &[
+    "a", "alors", "au", "aux", "bah", "ben", "bon", "c", "ca", "ce", "ces", "cet", "cette",
+    "comment", "d", "dans", "de", "des", "donc", "du", "elle", "en", "enfin", "entre", "est", "et",
+    "euh", "fais", "fait", "faire", "heu", "hum", "il", "j", "je", "l", "la", "le", "les", "ma",
+    "mais", "mes", "mon", "on", "ou", "par", "peux", "peut", "pour", "pourquoi", "qu", "quand",
+    "que", "quel", "quelle", "quelles", "quels", "qui", "quoi", "s", "sa", "se", "ses", "son",
+    "sur", "t", "ta", "te", "tes", "toi", "ton", "tu", "un", "une", "voila", "vos", "votre",
+    "vous", "y", "an", "and", "are", "be", "can", "could", "did", "do", "does", "for", "how", "i",
+    "in", "is", "it", "of", "on", "or", "so", "that", "the", "this", "to", "uh", "um", "was",
+    "well", "what", "when", "where", "which", "why", "with", "would", "you", "your",
+];
+
+/// Folded words without the function words.
+pub fn content_words(text: &str) -> Vec<String> {
+    tokens(text)
+        .into_iter()
+        .filter(|w| !FUNCTION_WORDS.contains(&w.as_str()))
+        .collect()
+}
+
+/// The same word, give or take an ending: equal, or the same first 4 letters when both have at
+/// least 4 ("relatif" and "relative").
+pub fn same_word(a: &str, b: &str) -> bool {
+    a == b
+        || (a.chars().count() >= 4
+            && b.chars().count() >= 4
+            && a.chars().take(4).eq(b.chars().take(4)))
+}
+
 /// The last non-space character, ignoring closing quotes and brackets.
 pub fn last_mark(text: &str) -> Option<char> {
     text.trim_end()

@@ -29,8 +29,9 @@ pub struct Detection {
 
 /// Returns the `Emit` the session's STT streams use. Every event goes to the overlay first,
 /// then to the answer engine, so a card always exists before its answer starts. With
-/// detection on, transcripts also feed the question engine, and every utterance it sends to
-/// the model starts its answer early.
+/// detection on, transcripts also feed the question engine: every utterance it sends to the
+/// model starts its answer early, and it asks the answer engine whether microphone speech
+/// reads out an answer.
 pub fn session_emit(
     runtime: &Handle,
     session_id: String,
@@ -60,7 +61,11 @@ pub fn session_emit(
                 ..DetectorConfig::DEFAULT
             },
             assembler: AssemblerConfig::DEFAULT,
-            on_escalate: Some(Arc::new(move |utterance| answers.speculate(utterance))),
+            on_escalate: Some({
+                let answers = answers.clone();
+                Arc::new(move |utterance| answers.speculate(utterance))
+            }),
+            reads_answer: Some(Arc::new(move |heard| answers.reads_answer(heard))),
         },
         answered.clone(),
     );

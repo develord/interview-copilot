@@ -10,9 +10,12 @@ import type { AnswerSection, AnswerStatus, Intent, Language, QuestionSource } fr
  * Rules (see docs/UI_STATE_MACHINE.md):
  *  1. A new question always creates a new card; other cards are never touched.
  *  2. Deltas are appended only to the card of the same question AND the same request.
- *  3. Completion is terminal: a completed answer is immutable.
- *  4. Question revisions update a pending card, but are recorded as corrections once an
- *     answer exists.
+ *  3. Completion is terminal: a completed answer is immutable, unless Rust restarts it for a
+ *     revision (rule 4).
+ *  4. Question revisions update the question while the answer is pending or streaming (Rust
+ *     restarts it). Once it has ended they are recorded as corrections; if Rust still restarts
+ *     the answer (the revision came within seconds of the question), the new attempt adopts
+ *     the latest one.
  *  5. Follow-ups are new cards linked through `contextRef`.
  *  6. Concurrent generations are independent; a new `answer.started` with a different request
  *     id supersedes the previous request for that same question only.
@@ -22,7 +25,7 @@ import type { AnswerSection, AnswerStatus, Intent, Language, QuestionSource } fr
 export interface AnswerCard {
   readonly id: string;
   readonly questionId: string;
-  /** Current question text. Only changes while the card is still `pending` (rule 4). */
+  /** Current question text. Changes while the answer is unfinished, or on a restart (rule 4). */
   question: string;
   readonly originalUtterance: string;
   readonly intent: Intent;
@@ -35,7 +38,7 @@ export interface AnswerCard {
   error: { message: string; retryable: boolean } | null;
   /** Number of generation attempts started for this card (retries increment it). */
   attempt: number;
-  /** Transcript corrections received after answering began; shown, never silently applied. */
+  /** Corrections received after the answer ended; shown, applied only by a new attempt. */
   questionRevisions: string[];
   readonly createdAt: number;
   updatedAt: number;
@@ -159,7 +162,7 @@ function addQuestion(state: CardState, question: DetectedQuestion, now: number):
 }
 
 function reviseQuestion(card: AnswerCard, text: string, now: number): ApplyOutcome {
-  if (card.status === "pending") {
+  if (card.status === "pending" || card.status === "streaming") {
     card.question = text;
   } else if (text !== card.question && !card.questionRevisions.includes(text)) {
     card.questionRevisions.push(text);
@@ -176,9 +179,15 @@ function startAttempt(
 ): ApplyOutcome {
   if (stream.retiredRequestIds.includes(requestId)) return ignore("stale-request");
   if (stream.requestId === requestId) return ignore("duplicate-start");
-  if (card.status === "completed") return ignore("already-terminal");
+  const revised = card.questionRevisions.at(-1);
+  if (card.status === "completed" && revised === undefined) return ignore("already-terminal");
 
   if (stream.requestId !== null) stream.retiredRequestIds.push(stream.requestId);
+  // A new attempt answers the latest question: Rust restarts with the revised text.
+  if (revised !== undefined) {
+    card.question = revised;
+    card.questionRevisions = [];
+  }
   stream.requestId = requestId;
   stream.nextSeq = 0;
   stream.buffered = {};
@@ -188,6 +197,7 @@ function startAttempt(
   card.details = "";
   card.error = null;
   card.attempt += 1;
+  card.completedAt = null;
   card.updatedAt = now;
   return APPLIED;
 }

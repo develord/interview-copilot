@@ -20,6 +20,7 @@ export const IGNORE_REASONS = [
   "ambiguous",
   "repeat",
   "not-technical",
+  "reading-answer",
 ] as const;
 export type UtteranceIgnoreReason = (typeof IGNORE_REASONS)[number];
 

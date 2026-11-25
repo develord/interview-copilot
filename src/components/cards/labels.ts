@@ -137,6 +137,7 @@ export const IGNORE_REASON_LABEL: Record<UtteranceIgnoreReason, string> = {
   ambiguous: "en attente de contexte",
   repeat: "question répétée",
   "not-technical": "question non technique",
+  "reading-answer": "lecture de la réponse",
 };
 
 export const ANSWER_MODEL_LABEL: Record<AnswerModel, { name: string; hint: string }> = {

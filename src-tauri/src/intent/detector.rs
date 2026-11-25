@@ -9,6 +9,7 @@
 //! Synchronous and clock-free (times are passed in), so every rule is unit-tested.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use super::assembler::Utterance;
 use super::classifier::{
@@ -85,6 +86,9 @@ impl Pending {
     }
 }
 
+/// Whether microphone speech reads out or speaks from an answer just shown.
+pub type AnswerCheck = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 #[derive(Debug)]
 pub enum Step {
     /// Decided without the model.
@@ -103,6 +107,7 @@ pub struct Detector {
     next_question: u64,
     context: VecDeque<ContextLine>,
     questions: VecDeque<Tracked>,
+    reads_answer: Option<AnswerCheck>,
 }
 
 fn clip(text: &str) -> String {
@@ -139,7 +144,14 @@ impl Detector {
             next_question: 0,
             context: VecDeque::new(),
             questions: VecDeque::new(),
+            reads_answer: None,
         }
+    }
+
+    /// With `include_microphone`, microphone speech that `check` recognises as an answer read
+    /// out is the candidate's, not a question.
+    pub fn set_answer_check(&mut self, check: AnswerCheck) {
+        self.reads_answer = Some(check);
     }
 
     /// The model failed for good (bad key, no credit): rules only from now on.
@@ -152,8 +164,20 @@ impl Detector {
         if text.is_empty() {
             return Step::Context;
         }
-        let asks_questions =
-            utterance.source == SourceKind::System || self.config.include_microphone;
+        let latest_recent = self
+            .questions
+            .back()
+            .filter(|q| now.saturating_sub(q.at) <= self.config.follow_up_window_ms)
+            .map(|q| q.id.clone());
+        let verdict = rules::evaluate(&text, latest_recent.is_some());
+        let microphone = utterance.source == SourceKind::Microphone;
+        // Testing alone on the microphone, the candidate reading out an answer, or speaking
+        // from it, is not the interviewer asking. A question never counts as reading.
+        let reading = microphone
+            && self.config.include_microphone
+            && matches!(&verdict, Verdict::Escalate(h) if !h.explicit_question)
+            && self.reads_answer.as_ref().is_some_and(|reads| reads(&text));
+        let asks_questions = (!microphone || self.config.include_microphone) && !reading;
         let speaker = if asks_questions {
             Speaker::Interviewer
         } else {
@@ -161,7 +185,7 @@ impl Detector {
         };
         let transcript: Vec<ContextLine> = self.context.iter().cloned().collect();
         self.remember(speaker, &text);
-        if !asks_questions {
+        if !asks_questions && !reading {
             return Step::Context;
         }
 
@@ -181,14 +205,18 @@ impl Detector {
                 latency_ms: None,
             };
 
-        let latest_recent = self
-            .questions
-            .back()
-            .filter(|q| now.saturating_sub(q.at) <= self.config.follow_up_window_ms)
-            .map(|q| q.id.clone());
+        if reading {
+            return Step::Done(vec![classified(report(
+                Decision::Ignored,
+                Some(IgnoreReason::ReadingAnswer),
+                None,
+                Stage::Rules,
+                None,
+            ))]);
+        }
 
         let words = text::tokens(&text);
-        match rules::evaluate(&text, latest_recent.is_some()) {
+        match verdict {
             Verdict::Drop(reason) => Step::Done(vec![classified(report(
                 Decision::Ignored,
                 Some(reason),
@@ -847,6 +875,37 @@ mod tests {
         );
         let p = pending(testing.on_utterance(mic, 0, 0));
         assert_eq!(p.request.speaker, Speaker::Interviewer);
+    }
+
+    #[test]
+    fn testing_on_the_microphone_reading_an_answer_out_is_not_a_question() {
+        let mut d = Detector::new(
+            SESSION,
+            DetectorConfig {
+                include_microphone: true,
+                ..DetectorConfig::DEFAULT
+            },
+            true,
+        );
+        d.set_answer_check(Arc::new(|heard| heard.contains("rem")));
+        let reading = said(
+            SourceKind::Microphone,
+            "m-1-0",
+            "Alors le rem c'est relatif à la racine",
+        );
+        let events = done(d.on_utterance(reading, 0, 0));
+        assert_eq!(report(&events).decision, Decision::Ignored);
+        assert_eq!(report(&events).reason, Some(IgnoreReason::ReadingAnswer));
+
+        // Still a question when it asks one, and the interviewer is never reading.
+        let asks = said(
+            SourceKind::Microphone,
+            "m-1-1",
+            "Pourquoi le rem est prévisible ?",
+        );
+        let p = pending(d.on_utterance(asks, 1, 0));
+        assert_eq!(p.request.transcript[0].speaker, Speaker::Candidate);
+        pending(d.on_utterance(interviewer("s-1-0", "Le rem est relatif à la racine"), 2, 0));
     }
 
     #[test]

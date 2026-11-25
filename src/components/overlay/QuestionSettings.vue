@@ -120,6 +120,9 @@ onMounted(refreshKey);
       <input v-model="settings.questions.includeMicrophone" type="checkbox" />
       <span>Détecter aussi les questions dites au micro (pour tester seul)</span>
     </label>
+    <p class="hint">
+      Lire une réponse à voix haute, ou parler à partir d'elle, n'est pas une question.
+    </p>
   </fieldset>
 </template>
 

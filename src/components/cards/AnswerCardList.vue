@@ -14,7 +14,10 @@ const settings = useOverlaySettings();
 const controller = useSessionController();
 
 const newestFirst = computed(() => settings.order === "newest-first");
-const ordered = computed(() => (newestFirst.value ? [...store.cards].reverse() : store.cards));
+const ordered = computed(() => {
+  if (settings.latestOnly) return store.cards.slice(-1);
+  return newestFirst.value ? [...store.cards].reverse() : store.cards;
+});
 const questionTextById = computed(
   () => new Map(store.cards.map((card) => [card.questionId, card.question])),
 );

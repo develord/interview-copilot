@@ -2,8 +2,9 @@
 //! never reaches the webview).
 //!
 //! It reacts to pipeline events, like the overlay does: `transcript.final` feeds the bounded
-//! context, `question.detected` starts an answer, `question.revised` restarts an answer that
-//! is still being written. Every generation has its own request id, so a retry or a restart
+//! context, `question.detected` starts an answer, and `question.revised` (the rest of a question
+//! cut by a pause, or the interviewer narrowing it) writes it again, even when it was complete.
+//! Every generation has its own request id, so a retry or a restart
 //! supersedes the previous one for that question only, and late tokens of an aborted request
 //! are rejected by the card lifecycle as stale.
 //!
@@ -13,6 +14,8 @@
 //!   time (~1 s). Otherwise it is aborted, never shown.
 //! - **Rolling summary.** Lines that leave the context are folded into a short summary
 //!   (`summary.rs`), sent with every answer.
+//! - **Reading check.** `reads_answer` tells the question engine whether microphone speech
+//!   comes from one of the latest answers: the candidate reading it out or speaking from it.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -43,6 +46,8 @@ const SPECULATIONS: usize = 4;
 const SPECULATION_TTL: Duration = Duration::from_secs(20);
 /// A failed summary is tried again after this delay, with the lines it could not fold.
 const SUMMARY_RETRY: Duration = Duration::from_secs(60);
+/// Latest answers that microphone speech is compared with, to recognise the candidate reading.
+const SHOWN_ANSWERS: usize = 3;
 pub const MAX_MANUAL_CHARS: usize = 2_000;
 
 pub type KeySource = Box<dyn Fn() -> Result<Option<String>, LlmError> + Send + Sync>;
@@ -61,6 +66,8 @@ struct InFlight {
 /// An answer started before its utterance was classified.
 struct Speculation {
     segment_ids: Vec<String>,
+    /// The words it answers, as heard.
+    text: String,
     route: Arc<Route>,
     abort: AbortHandle,
     started: Instant,
@@ -73,6 +80,8 @@ struct State {
     in_flight: HashMap<String, InFlight>,
     speculations: Vec<Speculation>,
     questions: VecDeque<Remembered>,
+    /// The generations of the latest answers shown in cards, newest last.
+    shown: VecDeque<Arc<Route>>,
     transcript: VecDeque<ContextLine>,
     summary: Option<String>,
     /// Lines that left `transcript` and are not in `summary` yet.
@@ -83,6 +92,16 @@ struct State {
     conversation: u64,
     next_request: u64,
     next_manual: u64,
+}
+
+impl State {
+    /// Keeps a generation that writes into a card, for `reads_answer`.
+    fn show(&mut self, route: Arc<Route>) {
+        self.shown.push_back(route);
+        while self.shown.len() > SHOWN_ANSWERS {
+            self.shown.pop_front();
+        }
+    }
 }
 
 pub struct AnswerEngine {
@@ -149,6 +168,7 @@ struct RouteState {
     seq: u64,
     held: Vec<(AnswerSection, String)>,
     primary: String,
+    details: String,
     end: Option<Result<(), LlmError>>,
 }
 
@@ -220,11 +240,20 @@ impl Route {
             return;
         };
         for (section, delta) in parts {
-            if section == AnswerSection::Primary {
-                state.primary.push_str(&delta);
+            match section {
+                AnswerSection::Primary => state.primary.push_str(&delta),
+                AnswerSection::Details => state.details.push_str(&delta),
             }
             state.send(emit, section, delta);
         }
+    }
+
+    /// Everything written so far, both sections.
+    fn text(&self) -> String {
+        self.0
+            .lock()
+            .map(|state| format!("{}\n{}", state.primary, state.details))
+            .unwrap_or_default()
     }
 
     /// Records the outcome; returns it when the generation writes into a card.
@@ -278,6 +307,7 @@ impl AnswerEngine {
                 in_flight: HashMap::new(),
                 speculations: Vec::new(),
                 questions: VecDeque::new(),
+                shown: VecDeque::new(),
                 transcript: VecDeque::new(),
                 summary: None,
                 unsummarized: Vec::new(),
@@ -337,19 +367,19 @@ impl AnswerEngine {
                     self.start(&question.id);
                 }
             }
+            // The rest of a question cut by a pause, or the interviewer narrowing it: either
+            // way the answer is written again, even if it was complete (the card adopts the
+            // revised question).
             PipelineEvent::QuestionRevised { question_id, text } => {
-                let restart = self.state.lock().is_ok_and(|mut state| {
-                    if let Some(r) = state
+                let known = self.state.lock().is_ok_and(|mut state| {
+                    state
                         .questions
                         .iter_mut()
                         .find(|r| r.question.id == *question_id)
-                    {
-                        r.question.normalized_question = text.clone();
-                    }
-                    state.in_flight.contains_key(question_id)
+                        .map(|r| r.question.normalized_question = text.clone())
+                        .is_some()
                 });
-                // A completed answer is immutable (the card records the revision instead).
-                if restart {
+                if known {
                     self.start(question_id);
                 }
             }
@@ -394,7 +424,6 @@ impl AnswerEngine {
         };
         let input = AnswerInput {
             question: utterance.text.clone(),
-            as_heard: utterance.text.clone(),
             intent: None,
             language: None,
             summary: state.summary.clone(),
@@ -406,6 +435,7 @@ impl AnswerEngine {
         let abort = self.spawn_generation(Ok(client), body, state.model.beta(), route.clone());
         state.speculations.push(Speculation {
             segment_ids: utterance.segment_ids.clone(),
+            text: utterance.text.clone(),
             route,
             abort,
             started: Instant::now(),
@@ -472,6 +502,16 @@ impl AnswerEngine {
         }
     }
 
+    /// Whether `heard` reads out or speaks from one of the latest answers shown: the candidate
+    /// on the microphone, not a question (see the question engine's `reads_answer`).
+    pub fn reads_answer(&self, heard: &str) -> bool {
+        let shown: Vec<Arc<Route>> = match self.state.lock() {
+            Ok(state) => state.shown.iter().cloned().collect(),
+            Err(_) => return false,
+        };
+        shown.iter().any(|route| reads_from(heard, &route.text()))
+    }
+
     /// Stops every generation and forgets the conversation (the history was cleared).
     pub fn cancel_all(&self) {
         if let Ok(mut state) = self.state.lock() {
@@ -482,6 +522,7 @@ impl AnswerEngine {
                 s.abort.abort();
             }
             state.questions.clear();
+            state.shown.clear();
             state.transcript.clear();
             state.summary = None;
             state.unsummarized.clear();
@@ -541,17 +582,24 @@ impl AnswerEngine {
             return false;
         };
         let speculation = state.speculations.remove(i);
-        // A follow-up needs the earlier exchange, which the early answer did not have.
-        if question.context_ref.is_some() {
+        // A follow-up needs the earlier exchange, which the early answer did not have. A
+        // question with a word the utterance lacks (a repaired term, a resolved reference) is
+        // not the one the early answer read.
+        if question.context_ref.is_some()
+            || !heard_all(&speculation.text, &question.normalized_question)
+        {
             speculation.abort.abort();
             return false;
         }
         state.next_request += 1;
         let request_id = format!("{}-a{}", question.id, state.next_request);
-        match speculation
+        let attached = speculation
             .route
-            .attach(&self.emit, &question.id, &request_id)
-        {
+            .attach(&self.emit, &question.id, &request_id);
+        if !matches!(attached, Attach::Failed) {
+            state.show(speculation.route.clone());
+        }
+        match attached {
             Attach::Live => {
                 state.in_flight.insert(
                     question.id.clone(),
@@ -602,7 +650,6 @@ impl AnswerEngine {
         });
         let input = AnswerInput {
             question: q.normalized_question.clone(),
-            as_heard: q.original_utterance.clone(),
             intent: Some(q.intent),
             language: Some(q.language),
             summary: state.summary.clone(),
@@ -618,6 +665,7 @@ impl AnswerEngine {
         let client = self.client(&mut state);
         let body = request_body(model, &input, self.profile.get().as_ref());
         let route = Arc::new(Route::live(question_id, &request_id));
+        state.show(route.clone());
         let abort = self.spawn_generation(client, body, model.beta(), route);
         state
             .in_flight
@@ -735,6 +783,28 @@ impl AnswerEngine {
     fn summary(&self) -> Option<String> {
         self.state.lock().ok()?.summary.clone()
     }
+}
+
+/// Words that rewording adds or drops without changing what is asked (folded).
+/// Whether every content word of `question` was heard, give or take an ending: an answer to
+/// the words heard then answers the question too. "M et REM" repaired to "em et rem" fails.
+fn heard_all(heard: &str, question: &str) -> bool {
+    let heard = text::tokens(heard);
+    text::content_words(question)
+        .iter()
+        .all(|word| heard.iter().any(|h| text::same_word(h, word)))
+}
+
+/// Whether `heard` reads out or paraphrases `answer`: it has at least 3 content words, and 3 in
+/// 5 of them are in the answer, give or take an ending.
+fn reads_from(heard: &str, answer: &str) -> bool {
+    let heard = text::content_words(heard);
+    let answer = text::tokens(answer);
+    let found = heard
+        .iter()
+        .filter(|word| answer.iter().any(|a| text::same_word(a, word)))
+        .count();
+    heard.len() >= 3 && found * 5 >= heard.len() * 3
 }
 
 #[cfg(test)]
@@ -895,6 +965,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_refined_question_is_answered_again_after_its_answer_ended() {
+        let (url, seen) = fake_api(vec![
+            (200, streamed_text("Il annonce les changements.", 4)),
+            (200, streamed_text("Sans interrompre la lecture.", 4)),
+        ])
+        .await;
+        let (engine, events) = engine(Some(url), Some("k"));
+        engine.observe(&PipelineEvent::QuestionDetected {
+            question: question("q1", "Quel est le rôle de aria-live ?", None),
+        });
+        ended(&events, 1).await;
+        // The end of a question cut by a pause, or the interviewer narrowing it, arrives as a
+        // revision after the first answer is done.
+        engine.observe(&PipelineEvent::QuestionRevised {
+            question_id: "q1".into(),
+            text: "Quel est le rôle de aria-live en mode polite ?".into(),
+        });
+        ended(&events, 2).await;
+
+        let lines = summary(&events.lock().unwrap());
+        assert!(lines.contains(&"started q1-a2".to_string()), "{lines:?}");
+        assert_eq!(lines.last().unwrap(), "completed q1-a2");
+        assert!(seen.lock().unwrap()[1].contains("aria-live en mode polite"));
+    }
+
+    #[tokio::test]
+    async fn speech_from_the_latest_answers_is_recognised_as_reading() {
+        let answer = "- rem : relatif à la taille de police de la racine (html).\n\
+                      - em : relatif à la taille de police de l'élément parent.";
+        let (url, _seen) = fake_api(vec![(200, streamed_text(answer, 6))]).await;
+        let (engine, events) = engine(Some(url), Some("k"));
+        assert!(!engine.reads_answer("rem relatif racine"));
+        engine.observe(&PipelineEvent::QuestionDetected {
+            question: question("q1", "Quelle est la différence entre em et rem ?", None),
+        });
+        ended(&events, 1).await;
+
+        assert!(engine.reads_answer("Le rem est relatif à la taille de police de la racine."));
+        assert!(engine.reads_answer("Alors en gros, rem dépend de la racine, em du parent"));
+        assert!(!engine.reads_answer("Je veux dire dans une media query"));
+        assert!(!engine.reads_answer("Et le rem ?"));
+        engine.cancel_all();
+        assert!(!engine.reads_answer("Le rem est relatif à la taille de police de la racine."));
+    }
+
+    #[tokio::test]
     async fn without_a_key_the_card_fails_with_a_retryable_message() {
         let (engine, events) = engine(None, None);
         engine.observe(&PipelineEvent::QuestionDetected {
@@ -1037,6 +1153,53 @@ mod tests {
         let request = seen.lock().unwrap()[0].clone();
         // The early request leaves intent and language to the model.
         assert!(request.contains("<question>Tu connais Docker ?</question>"));
+    }
+
+    #[tokio::test]
+    async fn an_early_answer_to_misheard_words_is_dropped_for_the_repaired_question() {
+        let (url, seen) = fake_api(vec![
+            (200, streamed_text("Tu veux dire vw ?", 3)),
+            (
+                200,
+                streamed_text(
+                    "- rem : la racine.
+- em : le parent.",
+                    3,
+                ),
+            ),
+        ])
+        .await;
+        let (engine, events) = engine(Some(url), Some("k"));
+        engine.speculate(&escalated(
+            "system-1-0",
+            "La différence entre M et REM en CSS ?",
+        ));
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        engine.observe(&PipelineEvent::QuestionDetected {
+            question: spoken(
+                "q1",
+                "Quelle est la différence entre em et rem en CSS ?",
+                "system-1-0",
+            ),
+        });
+        ended(&events, 1).await;
+
+        let text: String = events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                PipelineEvent::AnswerDelta { delta, .. } => Some(delta.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            text,
+            "- rem : la racine.
+- em : le parent."
+        );
+        assert_eq!(seen.lock().unwrap().len(), 2);
+        assert!(heard_all("Tu connais Docker ?", "Connais-tu Docker ?"));
     }
 
     #[tokio::test]

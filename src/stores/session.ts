@@ -199,7 +199,10 @@ export const useSessionStore = defineStore("session", () => {
         marks.firstWordAt = now;
         settleLatency(event.questionId);
       }
-    } else if (event.type === "question.revised" && active.value?.questionId === event.questionId) {
+    } else if (
+      (event.type === "question.revised" || event.type === "answer.started") &&
+      active.value?.questionId === event.questionId
+    ) {
       const card = getCardByQuestion(cardState, event.questionId);
       if (card) active.value = { ...active.value, question: card.question };
     }

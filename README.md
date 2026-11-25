@@ -17,6 +17,30 @@ classified, and each card shows its latency. See [docs/IMPLEMENTATION_STATUS.md]
 - Rust stable (MSVC) and the Visual Studio 2022 C++ Build Tools
 - WebView2 (included with Windows 11)
 
+## API keys
+
+| Service            | Used for                                                                        | Needed                                                                                                   | Get a key                                                        |
+| ------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Anthropic (Claude) | Question detection (Haiku), answers (Sonnet), rolling summary, CV import (Opus) | Yes for answers. Without it, only explicit questions and greetings are detected, and nothing is answered | [console.anthropic.com](https://console.anthropic.com)           |
+| AssemblyAI         | Live transcription (recommended, EU endpoint)                                   | One of AssemblyAI or Soniox                                                                              | [assemblyai.com/dashboard](https://www.assemblyai.com/dashboard) |
+| Soniox             | Live transcription (alternative, EU endpoint)                                   | One of AssemblyAI or Soniox; the key must come from an EU-region project                                 | [console.soniox.com](https://console.soniox.com)                 |
+
+**In the app,** keys are entered in Réglages › Audio: under « Transcrire en direct » for
+AssemblyAI or Soniox, and under « Détecter les questions » for Claude. They are stored in the
+**Windows Credential Manager** (`dev.interviewcopilot.desktop/stt` and `…/llm`) and read only by
+Rust. The webview can save, check and delete a key, but never read one back. The app reads no
+`.env` file.
+
+**Benchmarks** (`answer-bench`, `intent-bench`, `stt-bench`) also accept `ANTHROPIC_API_KEY`,
+`ASSEMBLYAI_API_KEY` and `SONIOX_API_KEY` from the environment, ahead of the saved keys. See
+[.env.example](.env.example). Every benchmark run calls the paid APIs.
+
+**Before a real interview:** tell the other party and get their consent. Then:
+
+- **AssemblyAI:** move to a paid plan and opt out of model training.
+- **Soniox:** use an EU-region project.
+- **Anthropic:** check your organization's data retention settings.
+
 ## Commands
 
 | Command            | What it does                                                               |
@@ -33,7 +57,7 @@ Press **Démarrer** (or `Ctrl+Shift+P`) to start the session. In the desktop app
 recorded to disk). Switch to **Démo** in Réglages to replay the scripted interview instead.
 
 **Transcription:** in Réglages → Audio, enable "Transcrire en direct", pick a provider and save
-its API key (stored in the Windows Credential Manager). The benchmark harness and setup are in
+its API key (see [API keys](#api-keys)). The benchmark harness and setup are in
 [docs/TRANSCRIPTION.md](docs/TRANSCRIPTION.md).
 
 Hardware smoke tests (they open the microphone for about 2 s and play a quiet tone) are opt-in:
